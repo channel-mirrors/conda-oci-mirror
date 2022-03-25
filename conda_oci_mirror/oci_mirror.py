@@ -25,7 +25,8 @@ def compress_folder(source_dir, output_filename):
         f"tar -cvzf {output_filename} *",
         cwd=source_dir,
         shell=True,
-        stdout=None,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         check=True,
     )
 
@@ -44,7 +45,6 @@ def prepare_metadata(path_to_archive, upload_files_directory):
     package_name = get_package_name(path_to_archive)
 
     dest_dir = pathlib.Path(upload_files_directory) / package_name
-    print(dest_dir)
     dest_dir.mkdir(parents=True)
 
     with TemporaryDirectory() as temp_dir:
@@ -78,9 +78,6 @@ def upload_conda_package(path_to_archive, host, channel):
             Layer(f"{package_name}/info/index.json", info_index_media_type),
         ]
 
-        for x in pathlib.Path(upload_files_directory).rglob("*"):
-            print(x)
-
         oras = ORAS(base_dir=upload_files_directory)
 
         name = package_name.rsplit("-", 2)[0]
@@ -93,10 +90,7 @@ def upload_conda_package(path_to_archive, host, channel):
             j = json.load(fi)
             subdir = j["subdir"]
 
-        print("attempting to push: ", f"{host}/{channel}/{subdir}/{name}")
-
-        print(version_and_build)
-        print(layers + metadata)
+        print("Pushing: ", f"{host}/{channel}/{subdir}/{name}")
         oras.push(
             f"{host}/{channel}/{subdir}/{name}", version_and_build, layers + metadata
         )

@@ -16,15 +16,12 @@ class ORAS:
         name, version, build = package_name.rsplit("-", 2)
         location = f"{location}/{subdir}/{name}:{version}-{build}"
         args = ["pull", location, "--media-type", media_type]
-
-        self.run(args)
+        return self.run(args)
 
     def push(self, target, tag, layers, config=None):
         layer_opts = [f"{str(l.file)}:{l.media_type}" for l in layers]
         dest = f"{target}:{tag}"
         args = ["push", dest] + layer_opts
-
-        print("ARGS: ", args)
         return self.run(args)
 
 
