@@ -9,15 +9,15 @@ from tempfile import TemporaryDirectory
 import requests
 from conda_package_handling import api as cph_api
 
+from conda_oci_mirror.constants import (
+    CACHE_DIR,
+    info_archive_media_type,
+    info_index_media_type,
+    package_conda_media_type,
+    package_tarbz2_media_type,
+)
 from conda_oci_mirror.oci import OCI
 from conda_oci_mirror.oras import ORAS, Layer
-
-info_archive_media_type = "application/vnd.conda.info.v1.tar+gzip"
-info_index_media_type = "application/vnd.conda.info.index.v1+json"
-package_tarbz2_media_type = "application/vnd.conda.package.v1"
-package_conda_media_type = "application/vnd.conda.package.v2"
-
-CACHE_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__))) / "cache"
 
 
 def compress_folder(source_dir, output_filename):
@@ -111,17 +111,20 @@ def get_repodata(channel, subdir):
     return repodata
 
 
-gh_session = requests.Session()
-gh_session.auth = ("wolfv", os.environ.get("GHA_PAT"))
+def get_github_packages(location, user_or_org, filter_function=None):
 
+    gh_session = requests.Session()
+    user_or_org, username_or_orgname = user_or_org.split(":")
+    gh_session.auth = (username_or_orgname, os.environ.get("GHA_PAT"))
 
-def get_github_packages(location, filter_function=None):
-    org = location.split("/", 1)
     # api_url = f'https://api.github.com/orgs/{org}/packages'
     headers = {"accept": "application/vnd.github.v3+json"}
-    api_url = f"https://api.github.com/users/wolfv/packages"
+    if user_or_org == "user":
+        api_url = f"https://api.github.com/users/{username_or_orgname}/packages"
+    elif user_or_org == "org":
+        api_url = f"https://api.github.com/orgs/{username_or_orgname}/packages"
 
-    api_url += "?package_type=container&visibility=public"
+    api_url += "?package_type=container"  # could also add `visibility=public` here
     r = gh_session.get(api_url, headers=headers)
 
     packages = []
@@ -158,6 +161,8 @@ def assert_checksum(path, package_dict):
 def mirror(channels, subdirs, packages, target_org_or_user, host):
 
     raw_user_or_org = target_org_or_user.split(":")[1]
+    oci = OCI("https://ghcr.io", raw_user_or_org)
+
     remote_loc = f"{host}/{raw_user_or_org}"
 
     for channel in channels:
@@ -167,27 +172,25 @@ def mirror(channels, subdirs, packages, target_org_or_user, host):
             existing_packages = set()
 
             all_subdir_packages = get_github_packages(
-                "ghcr.io/wolfv",
+                "ghcr.io",
+                target_org_or_user,
                 filter_function=lambda x: x["name"].startswith(f"{channel}/{subdir}/"),
             )
             for gh_pkg in all_subdir_packages:
                 for pkg in packages:
                     if gh_pkg["name"].endswith(f"/{pkg}"):
-                        tags = get_package_tags(
-                            "https://ghcr.io", "wolfv/" + gh_pkg["name"]
+                        tags = oci.get_tags(gh_pkg["name"])
+                        print(f"Found {len(tags)} existing tags for {gh_pkg['name']}")
+                        existing_packages.update(
+                            set(f"{pkg}-{tag}.tar.bz2" for tag in tags)
                         )
-                        existing_packages.add([f"{pkg}-{tag}.tar.bz2" for tag in tags])
 
             with open(repodata_fn) as fi:
                 j = json.load(fi)
 
             for key, package_info in j["packages"].items():
-                package_key = f"{package_info['name']}-{package_info['version']}-{package_info['build']}"
-                if (
-                    package_info["name"] in packages
-                    and package_key not in existing_packages
-                ):
 
+                if package_info["name"] in packages and key not in existing_packages:
                     r = requests.get(
                         f"https://conda.anaconda.org/{channel}/{subdir}/{key}",
                         allow_redirects=True,

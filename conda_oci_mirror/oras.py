@@ -19,7 +19,7 @@ class ORAS:
         return self.run(args)
 
     def push(self, target, tag, layers, config=None):
-        layer_opts = [f"{str(l.file)}:{l.media_type}" for l in layers]
+        layer_opts = [f"{str(layer.file)}:{layer.media_type}" for layer in layers]
         dest = f"{target}:{tag}"
         args = ["push", dest] + layer_opts
         return self.run(args)

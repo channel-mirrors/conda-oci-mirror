@@ -4,11 +4,18 @@ import requests
 
 
 class OCI:
-    def __init__(self, location):
+    def __init__(self, location, user_or_org):
         self.location = location
+        self.user_or_org = user_or_org
         self.session_map = {}
 
+    def full_package(self, package):
+        if package.startswith(self.user_or_org + "/"):
+            return package
+        return f"{self.user_or_org}/{package}"
+
     def oci_auth(self, package, scope="pull"):
+        package = self.full_package(package)
         if package in self.session_map:
             return self.session_map[package]
 
@@ -25,19 +32,41 @@ class OCI:
         return oci_session
 
     def get_blob(self, package, digest):
+        package = self.full_package(package)
+
         url = f"{self.location}/v2/{package}/blobs/{digest}"
         oci_session = self.oci_auth(self.location, package)
         res = oci_session.get(url)
         return res
 
-    def get_tags(self, package):
-        url = f"{self.location}/v2/{package}/tags/list"
-        oci_session = self.oci_auth(self.location, package)
-        res = oci_session.get(url)
+    def get_tags(self, package, n_tags=10_000, prev_last=None):
+        package = self.full_package(package)
 
-        return res.json()["tags"]
+        url = f"{self.location}/v2/{package}/tags/list?n={n_tags}"
+        if prev_last:
+            url += "&last=prev_last"
+        oci_session = self.oci_auth(self.location, package)
+
+        tags = []
+        link = True
+        # get all tags using the pagination
+        while link:
+            res = oci_session.get(url)
+            if res.headers.get("Link"):
+                link = res.headers.get("Link")
+                assert link.endswith('; rel="next"')
+                next_link = link.split("<")[len(link.split("<")) - 1].split(">")[0]
+                url = self.location + next_link
+            else:
+                link = None
+
+            tags += res.json()["tags"]
+
+        return tags
 
     def get_manifest(self, package, tag):
+        package = self.full_package(package)
+
         url = f"{self.location}/v2/{package}/manifests/{tag}"
 
         oci_session = self.oci_auth(package)

@@ -1,6 +1,12 @@
+import json
 import pathlib
 import tarfile
 
+from constants import (
+    info_archive_media_type,
+    info_index_media_type,
+    package_tarbz2_media_type,
+)
 from oras import ORAS
 
 
