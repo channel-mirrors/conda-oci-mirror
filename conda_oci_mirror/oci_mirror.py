@@ -1,18 +1,16 @@
-from conda_package_handling import api as cph_api
-from tempfile import TemporaryDirectory
-import pathlib
-import os
-import subprocess
-import shutil
-import json
-import requests
-import tarfile
 import hashlib
+import json
+import os
+import pathlib
+import shutil
+import subprocess
+from tempfile import TemporaryDirectory
 
-from pprint import pprint
+import requests
+from conda_package_handling import api as cph_api
 
-from oras import ORAS, Layer
-from oci import OCI
+from conda_oci_mirror.oci import OCI
+from conda_oci_mirror.oras import ORAS, Layer
 
 info_archive_media_type = "application/vnd.conda.info.v1.tar+gzip"
 info_index_media_type = "application/vnd.conda.info.index.v1+json"
@@ -23,17 +21,24 @@ CACHE_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__))) / "cache"
 
 
 def compress_folder(source_dir, output_filename):
-    return subprocess.check_output(f'tar -cvzf {output_filename} *', cwd=source_dir, shell=True)
+    return subprocess.run(
+        f"tar -cvzf {output_filename} *",
+        cwd=source_dir,
+        shell=True,
+        stdout=None,
+        check=True,
+    )
 
-# def extract(fn, dest_dir=None, components=None, prefix=None):
+
 def get_package_name(path_to_archive):
     fn = pathlib.Path(path_to_archive).name
-    if fn.endswith('.tar.bz2'):
+    if fn.endswith(".tar.bz2"):
         return fn[:-8]
-    elif fn.endswith('.conda'):
+    elif fn.endswith(".conda"):
         return fn[:-6]
     else:
         raise RuntimeError("Cannot decipher package type")
+
 
 def prepare_metadata(path_to_archive, upload_files_directory):
     package_name = get_package_name(path_to_archive)
@@ -43,14 +48,16 @@ def prepare_metadata(path_to_archive, upload_files_directory):
     dest_dir.mkdir(parents=True)
 
     with TemporaryDirectory() as temp_dir:
-        cph_api.extract(str(path_to_archive), temp_dir, components=['info'])
+        cph_api.extract(str(path_to_archive), temp_dir, components=["info"])
         index_json = os.path.join(temp_dir, "info", "index.json")
-        info_archive = os.path.join(temp_dir, 'info.tar.gz')
-        compress_folder(os.path.join(temp_dir, 'info'), os.path.join(temp_dir, 'info.tar.gz'))
+        info_archive = os.path.join(temp_dir, "info.tar.gz")
+        compress_folder(
+            os.path.join(temp_dir, "info"), os.path.join(temp_dir, "info.tar.gz")
+        )
 
-        (dest_dir / 'info').mkdir(parents=True)
-        shutil.copy(info_archive, dest_dir / 'info.tar.gz')
-        shutil.copy(index_json, dest_dir / 'info' / 'index.json')
+        (dest_dir / "info").mkdir(parents=True)
+        shutil.copy(info_archive, dest_dir / "info.tar.gz")
+        shutil.copy(index_json, dest_dir / "info" / "index.json")
 
 
 def upload_conda_package(path_to_archive, host, channel):
@@ -62,53 +69,65 @@ def upload_conda_package(path_to_archive, host, channel):
 
         prepare_metadata(path_to_archive, upload_files_directory)
 
-        if path_to_archive.name.endswith('tar.bz2'):
+        if path_to_archive.name.endswith("tar.bz2"):
             layers = [Layer(path_to_archive.name, package_tarbz2_media_type)]
         else:
             layers = [Layer(path_to_archive.name, package_conda_media_type)]
-        metadata = [Layer(f"{package_name}/info.tar.gz", info_archive_media_type),
-                    Layer(f"{package_name}/info/index.json", info_index_media_type)]
-
+        metadata = [
+            Layer(f"{package_name}/info.tar.gz", info_archive_media_type),
+            Layer(f"{package_name}/info/index.json", info_index_media_type),
+        ]
 
         for x in pathlib.Path(upload_files_directory).rglob("*"):
             print(x)
 
         oras = ORAS(base_dir=upload_files_directory)
 
-        name = package_name.rsplit('-', 2)[0]
-        version_and_build = '-'.join(package_name.rsplit('-', 2)[1:])
+        name = package_name.rsplit("-", 2)[0]
+        version_and_build = "-".join(package_name.rsplit("-", 2)[1:])
 
-        with open(pathlib.Path(upload_files_directory) / package_name / 'info' / 'index.json', 'r') as fi:
+        with open(
+            pathlib.Path(upload_files_directory) / package_name / "info" / "index.json",
+            "r",
+        ) as fi:
             j = json.load(fi)
             subdir = j["subdir"]
 
-        print("attempting to push: ", f'{host}/{channel}/{subdir}/{name}')
+        print("attempting to push: ", f"{host}/{channel}/{subdir}/{name}")
 
         print(version_and_build)
         print(layers + metadata)
-        oras.push(f'{host}/{channel}/{subdir}/{name}', version_and_build, layers + metadata)
+        oras.push(
+            f"{host}/{channel}/{subdir}/{name}", version_and_build, layers + metadata
+        )
+
 
 def get_repodata(channel, subdir):
     repodata = CACHE_DIR / channel / subdir / "repodata.json"
     if repodata.exists():
         return repodata
     repodata.parent.mkdir(parents=True, exist_ok=True)
-    r = requests.get(f"https://conda.anaconda.org/{channel}/{subdir}/repodata.json", allow_redirects=True)
-    with open(repodata, 'w') as fo:
+    r = requests.get(
+        f"https://conda.anaconda.org/{channel}/{subdir}/repodata.json",
+        allow_redirects=True,
+    )
+    with open(repodata, "w") as fo:
         fo.write(r.text)
 
     return repodata
 
+
 gh_session = requests.Session()
-gh_session.auth = ('wolfv', os.environ.get('GHA_PAT'))
+gh_session.auth = ("wolfv", os.environ.get("GHA_PAT"))
+
 
 def get_github_packages(location, filter_function=None):
-    org = location.split('/', 1)
+    org = location.split("/", 1)
     # api_url = f'https://api.github.com/orgs/{org}/packages'
-    headers = {'accept': 'application/vnd.github.v3+json'}
-    api_url = f'https://api.github.com/users/wolfv/packages'
+    headers = {"accept": "application/vnd.github.v3+json"}
+    api_url = f"https://api.github.com/users/wolfv/packages"
 
-    api_url += '?package_type=container&visibility=public'
+    api_url += "?package_type=container&visibility=public"
     r = gh_session.get(api_url, headers=headers)
 
     packages = []
@@ -123,19 +142,19 @@ def get_github_packages(location, filter_function=None):
 
 
 def assert_checksum(path, package_dict):
-    if 'sha256' in package_dict:
+    if "sha256" in package_dict:
         hash_func = hashlib.sha256()
-        expected = package_dict['sha256']
-    elif 'md5' in package_dict:
+        expected = package_dict["sha256"]
+    elif "md5" in package_dict:
         hash_func = hashlib.md5()
-        expected = package_dict['md5']
+        expected = package_dict["md5"]
     else:
         print("NO HASHES FOUND!")
         return
 
     with open(path, "rb") as f:
         # Read and update hash string value in blocks of 4K
-        for byte_block in iter(lambda: f.read(4096),b""):
+        for byte_block in iter(lambda: f.read(4096), b""):
             hash_func.update(byte_block)
 
     if hash_func.hexdigest() != expected:
@@ -144,8 +163,8 @@ def assert_checksum(path, package_dict):
 
 def mirror(channels, subdirs, packages, target_org_or_user, host):
 
-    raw_user_or_org = target_org_or_user.split(':')[1]
-    remote_loc = f'{host}/{raw_user_or_org}'
+    raw_user_or_org = target_org_or_user.split(":")[1]
+    remote_loc = f"{host}/{raw_user_or_org}"
 
     for channel in channels:
         for subdir in subdirs:
@@ -153,25 +172,36 @@ def mirror(channels, subdirs, packages, target_org_or_user, host):
 
             existing_packages = set()
 
-            all_subdir_packages = get_github_packages('ghcr.io/wolfv', filter_function=lambda x: x['name'].startswith(f'{channel}/{subdir}/'))
+            all_subdir_packages = get_github_packages(
+                "ghcr.io/wolfv",
+                filter_function=lambda x: x["name"].startswith(f"{channel}/{subdir}/"),
+            )
             for gh_pkg in all_subdir_packages:
                 for pkg in packages:
-                    if gh_pkg['name'].endswith(f'/{pkg}'):
-                        tags = get_package_tags('https://ghcr.io', 'wolfv/' + gh_pkg['name'])
-                        existing_packages.add([f'{pkg}-{tag}.tar.bz2' for tag in tags])
+                    if gh_pkg["name"].endswith(f"/{pkg}"):
+                        tags = get_package_tags(
+                            "https://ghcr.io", "wolfv/" + gh_pkg["name"]
+                        )
+                        existing_packages.add([f"{pkg}-{tag}.tar.bz2" for tag in tags])
 
             with open(repodata_fn) as fi:
                 j = json.load(fi)
 
             for key, package_info in j["packages"].items():
                 package_key = f"{package_info['name']}-{package_info['version']}-{package_info['build']}"
-                if package_info["name"] in packages and package_key not in existing_packages:
+                if (
+                    package_info["name"] in packages
+                    and package_key not in existing_packages
+                ):
 
-                    r = requests.get(f"https://conda.anaconda.org/{channel}/{subdir}/{key}", allow_redirects=True)
+                    r = requests.get(
+                        f"https://conda.anaconda.org/{channel}/{subdir}/{key}",
+                        allow_redirects=True,
+                    )
                     cache_dir = CACHE_DIR / channel / subdir
                     cache_dir.mkdir(parents=True, exist_ok=True)
                     ckey = cache_dir / key
-                    with open(ckey, 'wb') as fo:
+                    with open(ckey, "wb") as fo:
                         fo.write(r.content)
 
                     assert_checksum(ckey, package_info)
@@ -179,10 +209,20 @@ def mirror(channels, subdirs, packages, target_org_or_user, host):
                     upload_conda_package(ckey, remote_loc, channel)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
-    subdirs_to_mirror = ['linux-64', 'osx-64', 'osx-arm64', 'win-64', 'linux-aarch64', 'linux-ppc64le', 'noarch']
-    mirror(['conda-forge'], subdirs_to_mirror, ['xtensor', 'pip'], 'user:wolfv', 'ghcr.io')
+    subdirs_to_mirror = [
+        "linux-64",
+        "osx-64",
+        "osx-arm64",
+        "win-64",
+        "linux-aarch64",
+        "linux-ppc64le",
+        "noarch",
+    ]
+    mirror(
+        ["conda-forge"], subdirs_to_mirror, ["xtensor", "pip"], "user:wolfv", "ghcr.io"
+    )
 
     # oci = OCI('https://ghcr.io')
     # ns = "wolfv/conda-forge/osx-arm64/xtensor"
@@ -200,7 +240,6 @@ if __name__ == '__main__':
     #     print(json_blob.json())
 
     # oci.get_tags(""0.24.1-h3e96240_0")
-
 
     # for channel in channels_to_mirror:
     #     for subdir in subdirs_to_mirror:
