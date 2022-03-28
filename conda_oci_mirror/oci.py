@@ -3,12 +3,7 @@ import os
 import requests
 
 
-def get_envvars(envvars):
-    for e in envvars:
-        if os.environ.get(e):
-            return os.environ[e]
-    return None
-
+from conda_oci_mirror.util import get_github_auth
 
 class OCI:
     def __init__(self, location, user_or_org):
@@ -27,13 +22,8 @@ class OCI:
             return self.session_map[package]
 
         url = f"{self.location}/token?scope=repository:{package}:{scope}"
-        auth = None
+        auth = get_github_auth()
 
-        token = get_envvars(["GHA_PAT", "GITHUB_TOKEN"])
-        user = get_envvars(["GHA_USER", "GITHUB_USER"])
-
-        if user and token:
-            auth = (user, token)
         r = requests.get(url, auth=auth)
         j = r.json()
 
