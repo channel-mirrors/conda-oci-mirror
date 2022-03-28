@@ -1,0 +1,14 @@
+conda_oci_mirror.egg-info
+*.pyc
+*.un~
+*.pyc
+*conda_oci_mirror.egg-info*
+*.json
+__pycache__
+*__pycache__*
+*cache*
+conda_oci_mirror/cache/conda-forge/linux-64/repodata.json
+./cache/conda-forge/linux-64/repodata.json
+
+
+#git filter-branch -f --index-filter 'git rm --cached --ignore-unmatch conda_oci_mirror/cache/conda-forge/linux-64/repodata.json'
