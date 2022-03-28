@@ -1,9 +1,7 @@
-import os
-
 import requests
 
-
 from conda_oci_mirror.util import get_github_auth
+
 
 class OCI:
     def __init__(self, location, user_or_org):

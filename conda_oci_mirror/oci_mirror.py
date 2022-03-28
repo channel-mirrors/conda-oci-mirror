@@ -18,6 +18,7 @@ from conda_oci_mirror.constants import (
 )
 from conda_oci_mirror.oci import OCI
 from conda_oci_mirror.oras import ORAS, Layer
+from conda_oci_mirror.util import get_github_auth
 
 
 def compress_folder(source_dir, output_filename):
