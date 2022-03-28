@@ -116,7 +116,7 @@ def get_github_packages(location, user_or_org, filter_function=None):
 
     gh_session = requests.Session()
     user_or_org, username_or_orgname = user_or_org.split(":")
-    gh_session.auth = get_github_auth(user_or_org)
+    gh_session.auth = get_github_auth(username_or_orgname)
 
     # api_url = f'https://api.github.com/orgs/{org}/packages'
     headers = {"accept": "application/vnd.github.v3+json"}
