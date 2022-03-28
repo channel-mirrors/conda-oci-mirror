@@ -122,7 +122,8 @@ def get_github_packages(location, user_or_org, filter_function=None):
     # api_url = f'https://api.github.com/orgs/{org}/packages'
     headers = {"accept": "application/vnd.github.v3+json"}
     if user_or_org == "user":
-        api_url = f"https://api.github.com/users/{username_or_orgname}/packages"
+        api_url = f"https://api.github.com/user/packages\?package_type\=container"
+        #api_url = f"https://api.github.com/users/{username_or_orgname}/packages"
     elif user_or_org == "org":
         api_url = f"https://api.github.com/orgs/{username_or_orgname}/packages"
 
