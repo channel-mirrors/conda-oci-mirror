@@ -1,3 +1,5 @@
+import pathlib
+
 import click
 
 from conda_oci_mirror.oci_mirror import mirror as _mirror
@@ -26,9 +28,14 @@ def main():
 )
 @click.option("--user", default=None, help="Username for ghcr.io")
 @click.option("--host", default="ghcr.io", help="Host to push packages to")
-def mirror(channel, subdirs, user, packages, host):
+@click.option(
+    "--cache-dir", default=pathlib.Path.cwd() / "cache", help="Path to cache directory"
+)
+def mirror(channel, subdirs, user, packages, host, cache_dir):
+    cache_dir = pathlib.Path(cache_dir)
+    print(f"Using cache dir: {cache_dir}")
     print(f"Mirroring : {channel}")
     print(f"  Subdirs : {subdirs}")
     print(f"  Packages: {packages}")
     print(f"To: {host}/{user}")
-    _mirror([channel], subdirs, packages, f"user:{user}", host)
+    _mirror([channel], subdirs, packages, f"user:{user}", host, cache_dir=cache_dir)

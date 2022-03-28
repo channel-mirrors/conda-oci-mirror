@@ -96,8 +96,8 @@ def upload_conda_package(path_to_archive, host, channel):
         )
 
 
-def get_repodata(channel, subdir):
-    repodata = CACHE_DIR / channel / subdir / "repodata.json"
+def get_repodata(channel, subdir, cache_dir=CACHE_DIR):
+    repodata = cache_dir / channel / subdir / "repodata.json"
     if repodata.exists():
         return repodata
     repodata.parent.mkdir(parents=True, exist_ok=True)
@@ -158,8 +158,9 @@ def assert_checksum(path, package_dict):
         raise RuntimeError("HASHES ARE NOT MATCHING!")
 
 
-def mirror(channels, subdirs, packages, target_org_or_user, host):
-
+def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None):
+    if cache_dir is None:
+        cache_dir = CACHE_DIR
     raw_user_or_org = target_org_or_user.split(":")[1]
     oci = OCI("https://ghcr.io", raw_user_or_org)
 
@@ -167,7 +168,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host):
 
     for channel in channels:
         for subdir in subdirs:
-            repodata_fn = get_repodata(channel, subdir)
+            repodata_fn = get_repodata(channel, subdir, cache_dir)
 
             existing_packages = set()
 
@@ -195,9 +196,9 @@ def mirror(channels, subdirs, packages, target_org_or_user, host):
                         f"https://conda.anaconda.org/{channel}/{subdir}/{key}",
                         allow_redirects=True,
                     )
-                    cache_dir = CACHE_DIR / channel / subdir
-                    cache_dir.mkdir(parents=True, exist_ok=True)
-                    ckey = cache_dir / key
+                    full_cache_dir = cache_dir / channel / subdir
+                    full_cache_dir.mkdir(parents=True, exist_ok=True)
+                    ckey = full_cache_dir / key
                     with open(ckey, "wb") as fo:
                         fo.write(r.content)
 

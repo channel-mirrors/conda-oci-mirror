@@ -1,3 +1,6 @@
+import os
+import pathlib
+
 info_archive_media_type = "application/vnd.conda.info.v1.tar+gzip"
 info_index_media_type = "application/vnd.conda.info.index.v1+json"
 package_tarbz2_media_type = "application/vnd.conda.package.v1"

@@ -3,6 +3,13 @@ import os
 import requests
 
 
+def get_envvars(envvars):
+    for e in envvars:
+        if os.environ.get(e):
+            return os.environ[e]
+    return None
+
+
 class OCI:
     def __init__(self, location, user_or_org):
         self.location = location
@@ -21,8 +28,12 @@ class OCI:
 
         url = f"{self.location}/token?scope=repository:{package}:{scope}"
         auth = None
-        if os.environ.get("GHA_PAT"):
-            auth = (os.environ["GHA_USER"], os.environ["GHA_PAT"])
+
+        token = get_envvars(["GHA_PAT", "GITHUB_TOKEN"])
+        user = get_envvars(["GHA_USER", "GITHUB_USER"])
+
+        if user and token:
+            auth = (user, token)
         r = requests.get(url, auth=auth)
         j = r.json()
 
