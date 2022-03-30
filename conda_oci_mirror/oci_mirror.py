@@ -160,6 +160,27 @@ def assert_checksum(path, package_dict):
         raise RuntimeError("HASHES ARE NOT MATCHING!")
 
 
+existing_tags_cache = {}
+
+
+def get_existing_tags(oci, channel, subdir, package):
+    global existing_tags_cache
+    if existing_tags_cache.get(package):
+        return existing_tags_cache[package]
+
+    gh_name = f"{channel}/{subdir}/{package}"
+    tags = oci.get_tags(gh_name)
+    print(f"Found {len(tags)} existing tags for {gh_name}")
+    existing_tags_cache[package] = tags
+    return tags
+
+
+def get_existing_packages(oci, channel, subdir, package):
+    tags = get_existing_tags(oci, channel, subdir, package)
+
+    return set(f"{package}-{tag}.tar.bz2" for tag in tags)
+
+
 def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None):
     if cache_dir is None:
         cache_dir = CACHE_DIR
@@ -172,28 +193,18 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
         for subdir in subdirs:
             repodata_fn = get_repodata(channel, subdir, cache_dir)
 
-            existing_packages = set()
-
-            all_subdir_packages = get_github_packages(
-                "ghcr.io",
-                target_org_or_user,
-                filter_function=lambda x: x["name"].startswith(f"{channel}/{subdir}/"),
-            )
-            for gh_pkg in all_subdir_packages:
-                for pkg in packages:
-                    if gh_pkg["name"].endswith(f"/{pkg}"):
-                        tags = oci.get_tags(gh_pkg["name"])
-                        print(f"Found {len(tags)} existing tags for {gh_pkg['name']}")
-                        existing_packages.update(
-                            set(f"{pkg}-{tag}.tar.bz2" for tag in tags)
-                        )
-
             with open(repodata_fn) as fi:
                 j = json.load(fi)
 
             for key, package_info in j["packages"].items():
+                if packages and package_info["name"] not in packages:
+                    continue
 
-                if package_info["name"] in packages and key not in existing_packages:
+                existing_packages = get_existing_packages(
+                    oci, channel, subdir, package_info["name"]
+                )
+
+                if key not in existing_packages:
                     r = requests.get(
                         f"https://conda.anaconda.org/{channel}/{subdir}/{key}",
                         allow_redirects=True,
