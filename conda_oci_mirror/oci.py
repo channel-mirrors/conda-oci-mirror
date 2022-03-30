@@ -40,7 +40,7 @@ class OCI:
 
     def get_tags(self, package, n_tags=10_000, prev_last=None):
         package = self.full_package(package)
-
+        print(f"Getting tags for {package}")
         url = f"{self.location}/v2/{package}/tags/list?n={n_tags}"
         if prev_last:
             url += "&last=prev_last"
