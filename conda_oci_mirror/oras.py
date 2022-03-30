@@ -10,6 +10,7 @@ class ORAS:
     def run(self, args):
         res = subprocess.run([self.exec] + args, cwd=self.base_dir)
         if res.returncode != 0:
+            print(args)
             raise RuntimeError("ORAS had an error")
 
     def pull(self, location, subdir, package_name, media_type):
