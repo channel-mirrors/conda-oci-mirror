@@ -121,12 +121,10 @@ def get_github_packages(location, user_or_org, filter_function=None):
     print("Auth: ", gh_session.auth)
     # api_url = f'https://api.github.com/orgs/{org}/packages'
     headers = {"accept": "application/vnd.github.v3+json"}
-    # if user_or_org == "user":
-    #     api_url = f"https://api.github.com/users/{username_or_orgname}/packages"
-    # elif user_or_org == "org":
-    #     api_url = f"https://api.github.com/orgs/{username_or_orgname}/packages"
-
-    api_url = f"https://api.github.com/user/packages"
+    if user_or_org == "user":
+        api_url = f"https://api.github.com/users/{username_or_orgname}/packages"
+    elif user_or_org == "org":
+        api_url = f"https://api.github.com/orgs/{username_or_orgname}/packages"
 
     api_url += "?package_type=container"  # could also add `visibility=public` here
     r = gh_session.get(api_url, headers=headers)
@@ -162,6 +160,26 @@ def assert_checksum(path, package_dict):
         raise RuntimeError("HASHES ARE NOT MATCHING!")
 
 
+existing_tags_cache = {}
+
+
+def get_existing_tags(oci, channel, subdir, package):
+    global existing_tags_cache
+    if existing_tags_cache.get(package):
+        return existing_tags_cache[package]
+
+    gh_name = f"{channel}/{subdir}/{package}"
+    tags = oci.get_tags(gh_name)
+    print(f"Found {len(tags)} existing tags for {package}")
+    existing_tags_cache[package] = tags
+
+
+def get_existing_packages(oci, channel, subdir, package):
+    tags = get_existing_tags(oci, channel, subdir, package)
+
+    return set(f"{package}-{tag}.tar.bz2" for tag in tags)
+
+
 def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None):
     if cache_dir is None:
         cache_dir = CACHE_DIR
@@ -174,28 +192,18 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
         for subdir in subdirs:
             repodata_fn = get_repodata(channel, subdir, cache_dir)
 
-            existing_packages = set()
-
-            all_subdir_packages = get_github_packages(
-                "ghcr.io",
-                target_org_or_user,
-                filter_function=lambda x: x["name"].startswith(f"{channel}/{subdir}/"),
-            )
-            for gh_pkg in all_subdir_packages:
-                for pkg in packages:
-                    if gh_pkg["name"].endswith(f"/{pkg}"):
-                        tags = oci.get_tags(gh_pkg["name"])
-                        print(f"Found {len(tags)} existing tags for {gh_pkg['name']}")
-                        existing_packages.update(
-                            set(f"{pkg}-{tag}.tar.bz2" for tag in tags)
-                        )
-
             with open(repodata_fn) as fi:
                 j = json.load(fi)
 
             for key, package_info in j["packages"].items():
+                if packages and package_info["name"] not in packages:
+                    continue
 
-                if package_info["name"] in packages and key not in existing_packages:
+                existing_packages = get_existing_packages(
+                    oci, channel, subdir, package_info["name"]
+                )
+
+                if key not in existing_packages:
                     r = requests.get(
                         f"https://conda.anaconda.org/{channel}/{subdir}/{key}",
                         allow_redirects=True,

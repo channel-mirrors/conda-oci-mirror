@@ -51,6 +51,9 @@ class OCI:
         # get all tags using the pagination
         while link:
             res = oci_session.get(url)
+            if not res.ok:
+                return []
+
             if res.headers.get("Link"):
                 link = res.headers.get("Link")
                 assert link.endswith('; rel="next"')
