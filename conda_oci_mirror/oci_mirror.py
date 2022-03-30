@@ -121,10 +121,12 @@ def get_github_packages(location, user_or_org, filter_function=None):
     print("Auth: ", gh_session.auth)
     # api_url = f'https://api.github.com/orgs/{org}/packages'
     headers = {"accept": "application/vnd.github.v3+json"}
-    if user_or_org == "user":
-        api_url = f"https://api.github.com/users/{username_or_orgname}/packages"
-    elif user_or_org == "org":
-        api_url = f"https://api.github.com/orgs/{username_or_orgname}/packages"
+    # if user_or_org == "user":
+    #     api_url = f"https://api.github.com/users/{username_or_orgname}/packages"
+    # elif user_or_org == "org":
+    #     api_url = f"https://api.github.com/orgs/{username_or_orgname}/packages"
+
+    api_url = f"https://api.github.com/user/packages"
 
     api_url += "?package_type=container"  # could also add `visibility=public` here
     r = gh_session.get(api_url, headers=headers)
