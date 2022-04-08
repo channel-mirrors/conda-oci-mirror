@@ -1,12 +1,9 @@
-from email.policy import default
-import pathlib
-from unittest import result
 
+import pathlib
 import click
 
 from conda_oci_mirror.oci_mirror import mirror as _mirror
 from conda_oci_mirror.functions import compare_checksums as _compare_checksums
-#from functions import compare_checksums as _compare_checksums
 DEFAULT_SUBDIRS = [
     "linux-64",
     "osx-64",
@@ -38,7 +35,7 @@ def mirror(channel, subdirs, user, packages, host, cache_dir):
     cache_dir = pathlib.Path(cache_dir)
     print(f"Using cache dir: {cache_dir}")
     print(f"Mirroring : {channel}")
-    
+
     print(f"  Subdirs : {subdirs}")
     print(f"  Packages: {packages}")
     #####

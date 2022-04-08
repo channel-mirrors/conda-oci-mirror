@@ -8,7 +8,6 @@ import subprocess
 from tempfile import TemporaryDirectory
 import requests
 from conda_package_handling import api as cph_api
-
 from conda_oci_mirror.functions import get_all_packages
 from conda_oci_mirror.functions import upload_index_json
 
@@ -86,7 +85,6 @@ def upload_conda_package(path_to_archive, host, channel):
 
         name = package_name.rsplit("-", 2)[0]
         version_and_build = "-".join(package_name.rsplit("-", 2)[1:])
-        
 
         with open(
             pathlib.Path(upload_files_directory) / package_name / "info" / "index.json",
@@ -96,12 +94,12 @@ def upload_conda_package(path_to_archive, host, channel):
             subdir = j["subdir"]
 
         print("Pushing: ", f"{host}/{channel}/{subdir}/{name}")
-        print (f"{host}/{channel}/{subdir}/{name}", version_and_build, layers + metadata)
         oras.push(
             f"{host}/{channel}/{subdir}/{name}", version_and_build, layers + metadata
         )
     
     return j
+
 
 def get_repodata(channel, subdir, cache_dir=CACHE_DIR):
     repodata = cache_dir / channel / subdir / "repodata.json"
@@ -199,7 +197,6 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
     for channel in channels:
         for subdir in subdirs:
             global_index = {"info": {"subdir":{} }}
-
             global_index ["info"]["subdir"]=subdir
 
             repodata_fn = get_repodata(channel, subdir, cache_dir)
@@ -211,7 +208,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                 packages = get_all_packages(j)
             pkg_parent =""
             for key, package_info in j["packages"].items():
-            
+
                 if packages and package_info["name"] not in packages:
                     continue
 
@@ -227,7 +224,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                     full_cache_dir = cache_dir / channel / subdir
                     full_cache_dir.mkdir(parents=True, exist_ok=True)
                     ckey = full_cache_dir / key
-
+                    
                     with open(ckey, "wb") as fo:
                         fo.write(r.content)
 
@@ -243,6 +240,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                         
             upload_index_json(global_index,channel,remote_loc)
                     
+
 if __name__ == "__main__":
 
     subdirs_to_mirror = [
