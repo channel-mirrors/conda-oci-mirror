@@ -82,9 +82,6 @@ def upload_conda_package(path_to_archive, host, channel):
             Layer(f"{package_name}/info/index.json", info_index_media_type),
         ]
 
-        print(f"!!!!!!!!!!!!!!!!!!Upload_files_directory: {str(upload_files_directory)}")
-        print (f"!!!!!!!!!!!!!!!!Package_name: {str(package_name)}")
-
         oras = ORAS(base_dir=upload_files_directory)
 
         name = package_name.rsplit("-", 2)[0]
