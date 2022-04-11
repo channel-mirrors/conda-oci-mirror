@@ -47,8 +47,8 @@ def mirror(channel, subdirs, user, packages, host, cache_dir):
 @click.option("-s", "--subdirs", default=DEFAULT_SUBDIRS, multiple=True)
 def check(base, subdirs):
 #base: /home/runner/work/mirror_conda/mirror_conda/cache/conda-forge/
-    cache_dir = pathlib.Path(subdirs)
-    print(f"Using cache dir: {subdirs}")
+    cache_dir = pathlib.Path(base)
+    print(f"Using cache dir: {base}")
     result = []
     result = _compare_checksums(base,subdirs)
     if len(result) == 0:
