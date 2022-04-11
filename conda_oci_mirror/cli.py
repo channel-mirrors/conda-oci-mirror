@@ -43,12 +43,12 @@ def mirror(channel, subdirs, user, packages, host, cache_dir):
     _mirror([channel], subdirs, packages, f"user:{user}", host, cache_dir=cache_dir)
 
 @main.command()
-@click.option("-b", "--base", help="Select the the parent directory where all subdir are")
+@click.option("-b", "--base", default="/home/runner/work/mirror_conda/mirror_conda/cache/conda-forge/", help="Select the the parent directory where all subdir are")
 @click.option("-s", "--subdirs", default=DEFAULT_SUBDIRS, multiple=True)
 def check(base, subdirs):
 #base: /home/runner/work/mirror_conda/mirror_conda/cache/conda-forge/
-    cache_dir = pathlib.Path(cache_dir)
-    print(f"Using cache dir: {cache_dir}")
+    cache_dir = pathlib.Path(subdirs)
+    print(f"Using cache dir: {subdirs}")
     result = []
     result = _compare_checksums(base,subdirs)
     if len(result) == 0:
