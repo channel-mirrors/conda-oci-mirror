@@ -209,7 +209,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
 
             with open(repodata_fn) as fi:
                 j = json.load(fi)
-
+            print (j)
             if len(packages) == 0:
                 packages = get_all_packages(j)
             pkg_parent =""
