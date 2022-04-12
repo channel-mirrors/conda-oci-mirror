@@ -4,6 +4,7 @@ import click
 
 from conda_oci_mirror.oci_mirror import mirror as _mirror
 from conda_oci_mirror.functions import compare_checksums as _compare_checksums
+from conda_oci_mirror.functions import dict_is_empty as _dict_is_empty
 DEFAULT_SUBDIRS = [
     "linux-64",
     "osx-64",
@@ -51,9 +52,10 @@ def check(base, subdirs):
     print(f"Using cache dir: {base}")
     result = []
     result = _compare_checksums(base,subdirs)
-    if len(result) == 0:
-        print ("No inconsistencies found while comparing the checksums")
+
+    if _dict_is_empty(result):
+        print ("No inconsistencies found while comparing the checksums :)")
     else:
-        print ("Inconsistencies found in while comparing the checksums")
+        print ("Inconsistencies found while comparing the checksums :(")
         print (result)
 

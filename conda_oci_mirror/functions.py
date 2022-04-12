@@ -109,3 +109,10 @@ def upload_index_json(global_index, channel, remote_loc):
 
             logging.warning(f"index.json successfuly uploaded for {key}!")
             print(json_object)
+
+
+def dict_is_empty(dict):
+    for key in dict:
+        if len(dict[key]) != 0:
+            return False
+    return True
