@@ -237,7 +237,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                     
                     index_file = upload_conda_package(ckey, remote_loc, channel)
                     pkg_parent = index_file["name"]
-                    print (f"!!!Type: {pkg_parent}")
+                    print (f"!!!Type: {type(pkg_parent)}")
                     if pkg_parent not in manifests_checksums.keys():
                         manifests_checksums[pkg_parent]= {}
                         repodata_checksums [pkg_parent] = {}
