@@ -50,10 +50,10 @@ def check(base, subdirs):
     print(f"Using cache dir: {base}")
     result = []
     result = _compare_checksums(base,subdirs)
-
+    json_object = json.dumps(result, indent=4)
     if _dict_is_empty(result):
         print ("No inconsistencies found while comparing the checksums :)")
     else:
         print ("Inconsistencies found while comparing the checksums :(")
-        print (result)
+        print (json_object)
 

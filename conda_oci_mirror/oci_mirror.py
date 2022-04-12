@@ -237,6 +237,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                     
                     index_file = upload_conda_package(ckey, remote_loc, channel)
                     pkg_parent = index_file["name"]
+                    print (f"!!!Type: {pkg_parent}")
                     if pkg_parent not in manifests_checksums.keys():
                         manifests_checksums[pkg_parent]= {}
                         repodata_checksums [pkg_parent] = {}
@@ -279,15 +280,15 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                 repodata_checksums_path = full_cache_dir / "repodata_checksums.json"
                 manifests_checksums_path = full_cache_dir / "manifest_checksums.json"
                 
-                json_object_repodt = json.dumps(repodata_checksums, indent=4)
-                json_object_manfst = json.dumps(manifests_checksums, indent=4)
+                #json_object_repodt = json.dumps(repodata_checksums, indent=4)
+                #json_object_manfst = json.dumps(manifests_checksums, indent=4)
 
 
                 with open(repodata_checksums_path, "w") as write_file:
-                    json.dump(json_object_repodt, write_file)
+                    json.dump(repodata_checksums, write_file)
 
                 with open(manifests_checksums_path, "w") as write_file:
-                    json.dump(json_object_manfst, write_file)
+                    json.dump(manifests_checksums, write_file)
 
             upload_index_json(global_index,channel,remote_loc)
                     
