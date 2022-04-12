@@ -40,37 +40,12 @@ def compare_checksums(base, all_subdirs):
             with open(manifests_checksums_path) as fi:
                 dict_manfst_checksums = json.load(fi)
 
-            #found_packages = ["zlib", "xtensor-blas"]
             for key in dict_repo_checksums.keys():
                 for sub_key in dict_repo_checksums[key].keys():
                     repo_check = dict_repo_checksums[key][sub_key]
                     manfst_check = dict_manfst_checksums[key][sub_key]
                     if repo_check != manfst_check:
                         differences[subdir].append(sub_key)
-
-
-#            for pkg_name in found_packages:
-#                full_name = "conda-forge/" + subdir + "/" + pkg_name
-#                print (f"!!!Fullname is: {full_name}")
-#                tags = oci.get_tags(full_name)
-
-#                for tag in tags:
-#                    print (f"!!tag: {tag}")
-#                    key = pkg_name + "-" + tag + ".tar.bz2"
-#                    print("key: " + key)
-
-#                    sha_repodata = "sha256:" + repodata["packages"][key]["sha256"]
-#                    print("sha_repodata: " + sha_repodata)
-
-#                    manifest = oci.get_manifest(full_name, tag)
-#                    sha_manifest = ""
-
-#                    for layer in manifest["layers"]:
-#                        if layer["mediaType"] == "application/vnd.conda.package.v1":
-#                            sha_manifest = layer["digest"]
-#                            print("sha_manifest: " + sha_manifest)
-#                            if sha_repodata != sha_manifest:
-#                                differences[subdir].append(key)
 
     return differences
 
