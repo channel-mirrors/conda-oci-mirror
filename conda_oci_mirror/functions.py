@@ -43,9 +43,11 @@ def compare_checksums(base, all_subdirs):
 
             for pkg_name in found_packages:
                 full_name = "conda-forge/" + subdir + "/" + pkg_name
+                print (f"!!!Fullname is: {str(full_name)}")
                 tags = oci.get_tags(full_name)
 
                 for tag in tags:
+                    print (f"!!tag: {tag}")
                     key = pkg_name + "-" + tag + ".tar.bz2"
                     print("key: " + key)
 

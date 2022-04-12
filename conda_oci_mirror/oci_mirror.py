@@ -194,7 +194,10 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
     remote_loc = f"{host}/{raw_user_or_org}"
 
     for channel in channels:
+        checksums_diferences={}
         for subdir in subdirs:
+            checksums_diferences[subdir]=[]
+            
             global_index = {"info": {"subdir":{} }}
             global_index ["info"]["subdir"]=subdir
 
@@ -230,11 +233,31 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                     
                     index_file = upload_conda_package(ckey, remote_loc, channel)
                     pkg_parent = index_file["name"]
+                    print(f"!!!pkg_parent: {pkg_parent}")
                     if pkg_parent in global_index.keys():
                         global_index[pkg_parent].append(index_file)
                     else:
                         global_index[pkg_parent]=[]
                         global_index[pkg_parent].append(index_file)
+                    
+                    #copy generate index json for the subdir(arch)
+                    #sha_repodata = "sha256:" + repodata_fn["packages"][pkg_parent]["sha256"]
+                    #print("sha_repodata: " + sha_repodata)
+
+                    #tag = index_file["build"]
+                    #manifest = oci.get_manifest(fullnaem, tag)
+                    #sha_manifest = ""
+
+                    #for layer in manifest["layers"]:
+                    #    if layer["mediaType"] == "application/vnd.conda.package.v1":
+                    #        sha_manifest = layer["digest"]
+                    #        print("sha_manifest: " + sha_manifest)
+                    #        if sha_repodata != sha_manifest:
+                    #            checksums_diferences[subdir].append(key)
+
+
+
+                    #delete the package
                         
             upload_index_json(global_index,channel,remote_loc)
                     
