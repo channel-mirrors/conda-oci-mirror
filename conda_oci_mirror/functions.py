@@ -29,40 +29,48 @@ def get_all_packages(repodata):
 def compare_checksums(base, all_subdirs):
     differences = {"linux-64": [], "osx-64": [], "osx-arm64": [], "win-64": [], "linux-aarch64": [], "linux-ppc64le": [], "noarch": []}
     for subdir in all_subdirs:
-        location = repodata_path = Path(base) / subdir
+        location = Path(base) / subdir
         if location.exists():
-            repodata_path = location / "repodata.json"
+            repodata_checksums_path = location / "repodata_checksums.json"
+            manifests_checksums_path = location / "manifest_checksums.json"
 
-            with open(repodata_path) as fi:
-                repodata = json.load(fi)
+            with open(repodata_checksums_path) as fi:
+                dict_repo_checksums = json.load(fi)
 
-            found_packages = get_all_packages(repodata)
+            with open(manifests_checksums_path) as fi:
+                dict_manfst_checksums = json.load(fi)
 
-            # test( to be deleted b4 run on production)
-            found_packages = ["zlib", "xtensor-blas"]
+            #found_packages = ["zlib", "xtensor-blas"]
+            for key in dict_repo_checksums.keys():
+                for sub_key in dict_repo_checksums[key].keys():
+                    repo_check = dict_repo_checksums[key][sub_key]
+                    manfst_check = dict_manfst_checksums[key][sub_key]
+                    if repo_check != manfst_check:
+                        differences[subdir].append(sub_key)
 
-            for pkg_name in found_packages:
-                full_name = "conda-forge/" + subdir + "/" + pkg_name
-                print (f"!!!Fullname is: {str(full_name)}")
-                tags = oci.get_tags(full_name)
 
-                for tag in tags:
-                    print (f"!!tag: {tag}")
-                    key = pkg_name + "-" + tag + ".tar.bz2"
-                    print("key: " + key)
+#            for pkg_name in found_packages:
+#                full_name = "conda-forge/" + subdir + "/" + pkg_name
+#                print (f"!!!Fullname is: {full_name}")
+#                tags = oci.get_tags(full_name)
 
-                    sha_repodata = "sha256:" + repodata["packages"][key]["sha256"]
-                    print("sha_repodata: " + sha_repodata)
+#                for tag in tags:
+#                    print (f"!!tag: {tag}")
+#                    key = pkg_name + "-" + tag + ".tar.bz2"
+#                    print("key: " + key)
 
-                    manifest = oci.get_manifest(full_name, tag)
-                    sha_manifest = ""
+#                    sha_repodata = "sha256:" + repodata["packages"][key]["sha256"]
+#                    print("sha_repodata: " + sha_repodata)
 
-                    for layer in manifest["layers"]:
-                        if layer["mediaType"] == "application/vnd.conda.package.v1":
-                            sha_manifest = layer["digest"]
-                            print("sha_manifest: " + sha_manifest)
-                            if sha_repodata != sha_manifest:
-                                differences[subdir].append(key)
+#                    manifest = oci.get_manifest(full_name, tag)
+#                    sha_manifest = ""
+
+#                    for layer in manifest["layers"]:
+#                        if layer["mediaType"] == "application/vnd.conda.package.v1":
+#                            sha_manifest = layer["digest"]
+#                            print("sha_manifest: " + sha_manifest)
+#                            if sha_repodata != sha_manifest:
+#                                differences[subdir].append(key)
 
     return differences
 

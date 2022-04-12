@@ -194,9 +194,13 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
     remote_loc = f"{host}/{raw_user_or_org}"
 
     for channel in channels:
-        checksums_diferences={}
         for subdir in subdirs:
-            checksums_diferences[subdir]=[]
+            manifests_checksums={}
+            repodata_checksums={}
+        
+            full_cache_dir = cache_dir / channel / subdir
+            manifests_checksums[subdir]=[]
+            repodata_checksums[subdir]=[]
             
             global_index = {"info": {"subdir":{} }}
             global_index ["info"]["subdir"]=subdir
@@ -223,7 +227,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                         f"https://conda.anaconda.org/{channel}/{subdir}/{key}",
                         allow_redirects=True,
                     )
-                    full_cache_dir = cache_dir / channel / subdir
+                    
                     full_cache_dir.mkdir(parents=True, exist_ok=True)
                     ckey = full_cache_dir / key
                     with open(ckey, "wb") as fo:
@@ -233,32 +237,58 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                     
                     index_file = upload_conda_package(ckey, remote_loc, channel)
                     pkg_parent = index_file["name"]
-                    print(f"!!!pkg_parent: {pkg_parent}")
+                    if pkg_parent not in manifests_checksums.keys():
+                        manifests_checksums[pkg_parent]= {}
+                        repodata_checksums [pkg_parent] = {}
+                    
+                    #print(f"!!!pkg_parent: {pkg_parent}")
                     if pkg_parent in global_index.keys():
                         global_index[pkg_parent].append(index_file)
                     else:
                         global_index[pkg_parent]=[]
                         global_index[pkg_parent].append(index_file)
-                    
+
+#new                    
                     #copy generate index json for the subdir(arch)
-                    #sha_repodata = "sha256:" + repodata_fn["packages"][pkg_parent]["sha256"]
-                    #print("sha_repodata: " + sha_repodata)
+                    tag = index_file["version"] + "-" + index_file["build"]
+                    current_pkg = pkg_parent + "-" + tag
+                    full_name = "conda-forge/" + subdir + "/" + pkg_parent
 
-                    #tag = index_file["build"]
-                    #manifest = oci.get_manifest(fullnaem, tag)
-                    #sha_manifest = ""
+                    sha_repodata = "sha256:" + repodata_fn["packages"][pkg_parent]["sha256"]
+                    dict_rpdt = {}
+                    dict_rpdt[current_pkg] = sha_repodata
+                    repodata_checksums[pkg_parent][current_pkg] = sha_repodata
 
-                    #for layer in manifest["layers"]:
-                    #    if layer["mediaType"] == "application/vnd.conda.package.v1":
-                    #        sha_manifest = layer["digest"]
-                    #        print("sha_manifest: " + sha_manifest)
-                    #        if sha_repodata != sha_manifest:
-                    #            checksums_diferences[subdir].append(key)
+                    manifest = oci.get_manifest(full_name, tag)
+                    sha_manifest = ""
 
-
+                    for layer in manifest["layers"]:
+                        if layer["mediaType"] == "application/vnd.conda.package.v1":
+                            sha_manifest = layer["digest"]
+                            manifests_checksums[pkg_parent][current_pkg] = sha_manifest
 
                     #delete the package
-                        
+                    for child in full_cache_dir.iterdir():
+                        if child.is_dir():
+                            child.rmdir()
+                        elif not ".json" in str(child):
+                            child.unlink(missing_ok=True)
+
+            #store both dicts   
+            if full_cache_dir.is_dir():
+                repodata_checksums_path = full_cache_dir / "repodata_checksums.json"
+                manifests_checksums_path = full_cache_dir / "manifest_checksums.json"
+                
+                json_object_repodt = json.dumps(repodata_checksums, indent=4)
+                json_object_manfst = json.dumps(manifests_checksums, indent=4)
+
+
+                with open(repodata_checksums_path, "w") as write_file:
+                    json.dump(json_object_repodt, write_file)
+
+                with open(manifests_checksums_path, "w") as write_file:
+                    json.dump(json_object_manfst, write_file)
+
             upload_index_json(global_index,channel,remote_loc)
                     
 if __name__ == "__main__":
