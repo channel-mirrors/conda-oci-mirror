@@ -199,8 +199,8 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
             repodata_checksums={}
         
             full_cache_dir = cache_dir / channel / subdir
-            manifests_checksums[subdir]=[]
-            repodata_checksums[subdir]=[]
+            #manifests_checksums[subdir]={}
+            #repodata_checksums[subdir]={}
             
             global_index = {"info": {"subdir":{} }}
             global_index ["info"]["subdir"]=subdir
