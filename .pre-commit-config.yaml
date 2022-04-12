@@ -1,38 +1,4 @@
 repos:
-<<<<<<< HEAD
--   repo: https://github.com/psf/black
-    rev: 19.10b0
-    hooks:
-    -   id: black
-        args: [--safe, --quiet]
--   repo: https://github.com/asottile/blacken-docs
-    rev: v1.7.0
-    hooks:
-    -   id: blacken-docs
-        additional_dependencies: [black==19.10b0]
--   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v3.2.0
-    hooks:
-    -   id: trailing-whitespace
-    -   id: end-of-file-fixer
-    -   id: check-yaml
-    -   id: check-json
--   repo: https://github.com/pre-commit/mirrors-isort
-    rev: v5.2.2
-    hooks:
-    -   id: isort
-
--   repo: https://gitlab.com/pycqa/flake8
-    rev: 3.8.3
-    hooks:
-    -   id: flake8
-        exclude: tests/data
-        language_version: python3
-        additional_dependencies:
-            - flake8-typing-imports==1.9.0
-            - flake8-builtins==1.5.3
-            - flake8-bugbear==20.1.4
-=======
   - repo: https://github.com/pycqa/isort
     rev: 5.10.1
     hooks:
@@ -63,4 +29,4 @@ repos:
     hooks:
       - id: pylint
         args: [--disable=all, --enable=unused-import]
->>>>>>> 6d88a18... add initial cli
+
