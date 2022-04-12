@@ -237,7 +237,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                     
                     index_file = upload_conda_package(ckey, remote_loc, channel)
                     pkg_parent = index_file["name"]
-                    print (f"!!!Type: {type(pkg_parent)}")
+                    
                     if pkg_parent not in manifests_checksums.keys():
                         manifests_checksums[pkg_parent]= {}
                         repodata_checksums [pkg_parent] = {}
@@ -255,7 +255,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                     current_pkg = pkg_parent + "-" + tag
                     full_name = "conda-forge/" + subdir + "/" + pkg_parent
 
-                    sha_repodata = "sha256:" + repodata_fn["packages"][pkg_parent]["sha256"]
+                    sha_repodata = "sha256:" + j["packages"][pkg_parent]["sha256"]
                     dict_rpdt = {}
                     dict_rpdt[current_pkg] = sha_repodata
                     repodata_checksums[pkg_parent][current_pkg] = sha_repodata
