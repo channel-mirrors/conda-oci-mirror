@@ -209,7 +209,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
 
             with open(repodata_fn) as fi:
                 j = json.load(fi)
-            print (j)
+
             if len(packages) == 0:
                 packages = get_all_packages(j)
             pkg_parent =""
@@ -255,7 +255,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                     current_pkg = pkg_parent + "-" + tag
                     full_name = "conda-forge/" + subdir + "/" + pkg_parent
 
-                    sha_repodata = "sha256:" + j["packages"][pkg_parent]["sha256"]
+                    sha_repodata = "sha256:" + j["packages"][f"{current_pkg}.tar.bz2"]["sha256"]
                     dict_rpdt = {}
                     dict_rpdt[current_pkg] = sha_repodata
                     repodata_checksums[pkg_parent][current_pkg] = sha_repodata
