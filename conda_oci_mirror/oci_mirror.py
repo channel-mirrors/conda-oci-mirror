@@ -95,6 +95,8 @@ def upload_conda_package(path_to_archive, host, channel):
         oras.push(
             f"{host}/{channel}/{subdir}/{name}", version_and_build, layers + metadata
         )
+    return j
+
 
 def get_repodata(channel, subdir, cache_dir=CACHE_DIR):
     repodata = cache_dir / channel / subdir / "repodata.json"
@@ -211,7 +213,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                         f"https://conda.anaconda.org/{channel}/{subdir}/{key}",
                         allow_redirects=True,
                     )
-
+                    
                     full_cache_dir.mkdir(parents=True, exist_ok=True)
                     ckey = full_cache_dir / key
                     with open(ckey, "wb") as fo:
@@ -227,6 +229,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                             child.rmdir()
                         elif ".json" not in str(child):
                             child.unlink(missing_ok=True)
+
 
 
 if __name__ == "__main__":
