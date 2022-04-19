@@ -281,9 +281,6 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                 )
 
                 if key not in existing_packages:
-                    print("Copy ", key)
-                    continue
-
                     tasks.append(
                         Task(
                             channel,
