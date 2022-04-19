@@ -6,6 +6,7 @@ import pathlib
 import shutil
 import subprocess
 import time
+import fnmatch
 from tempfile import TemporaryDirectory
 
 import requests
@@ -271,14 +272,18 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                 j = json.load(fi)
 
             for key, package_info in j["packages"].items():
-                if packages and package_info["name"] not in packages:
-                    continue
+                if packages:
+                    if not any(fnmatch.fnmatch(package_info["name"], x) for x in packages):
+                        continue
 
                 existing_packages = get_existing_packages(
                     oci, channel, subdir, package_info["name"]
                 )
 
                 if key not in existing_packages:
+                    print("Copy ", key)
+                    continue
+
                     tasks.append(
                         Task(
                             channel,
