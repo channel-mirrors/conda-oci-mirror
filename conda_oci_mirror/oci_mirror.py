@@ -1,5 +1,6 @@
 import hashlib
 import json
+import multiprocessing as mp
 import os
 import pathlib
 import shutil
@@ -141,7 +142,7 @@ def get_github_packages(location, user_or_org, filter_function=None):
     return packages
 
 
-def assert_checksum(path, package_dict):
+def check_checksum(path, package_dict):
     if "sha256" in package_dict:
         hash_func = hashlib.sha256()
         expected = package_dict["sha256"]
@@ -150,7 +151,7 @@ def assert_checksum(path, package_dict):
         expected = package_dict["md5"]
     else:
         print("NO HASHES FOUND!")
-        return
+        return True
 
     with open(path, "rb") as f:
         # Read and update hash string value in blocks of 4K
@@ -158,7 +159,9 @@ def assert_checksum(path, package_dict):
             hash_func.update(byte_block)
 
     if hash_func.hexdigest() != expected:
-        raise RuntimeError("HASHES ARE NOT MATCHING!")
+        return False
+    else:
+        return True
 
 
 existing_tags_cache = {}
@@ -166,12 +169,15 @@ existing_tags_cache = {}
 
 def get_existing_tags(oci, channel, subdir, package):
     global existing_tags_cache
-    if existing_tags_cache.get(package):
+
+    if package in existing_tags_cache:
         return existing_tags_cache[package]
 
     gh_name = f"{channel}/{subdir}/{package}"
     tags = oci.get_tags(gh_name)
+
     print(f"Found {len(tags)} existing tags for {gh_name}")
+
     existing_tags_cache[package] = tags
     return tags
 
@@ -182,6 +188,55 @@ def get_existing_packages(oci, channel, subdir, package):
     return set(f"{package}-{tag}.tar.bz2" for tag in tags)
 
 
+class Task:
+    def __init__(self, channel, subdir, package, package_info, cache_dir, remote_loc):
+        self.channel = channel
+        self.subdir = subdir
+        self.package = package
+        self.package_info = package_info
+        self.cache_dir = cache_dir
+        self.remote_loc = remote_loc
+        self.retries = 0
+
+    def download_file(self):
+        url = f"https://conda.anaconda.org/{self.channel}/{self.subdir}/{self.package}"
+        fn = self.cache_dir / self.package
+        with requests.get(url, stream=True, allow_redirects=True) as r:
+            r.raise_for_status()
+            with open(fn, "wb") as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        return fn
+
+    def run(self):
+
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+        file = self.download_file()
+
+        print(f"File downloaded: {file}")
+        if check_checksum(file, self.package_info) == False:
+            self.retries += 1
+
+            file.unlink()
+
+            if self.retries > 3:
+                raise RuntimeError(
+                    "Could not retrieve the correct file. Hashes not matching for 3 times"
+                )
+
+            return self.run()
+
+        upload_conda_package(file, self.remote_loc, self.channel)
+        print(f"File uploaded to {self.remote_loc}")
+        # delete the package
+        file.unlink()
+
+
+def run_task(t):
+    return t.run()
+
+
 def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None):
     if cache_dir is None:
         cache_dir = CACHE_DIR
@@ -190,6 +245,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
 
     remote_loc = f"{host}/{raw_user_or_org}"
 
+    tasks = []
     for channel in channels:
         for subdir in subdirs:
 
@@ -209,27 +265,21 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                 )
 
                 if key not in existing_packages:
-                    r = requests.get(
-                        f"https://conda.anaconda.org/{channel}/{subdir}/{key}",
-                        allow_redirects=True,
+                    tasks.append(
+                        Task(
+                            channel,
+                            subdir,
+                            key,
+                            package_info,
+                            full_cache_dir,
+                            remote_loc,
+                        )
                     )
-                    
-                    full_cache_dir.mkdir(parents=True, exist_ok=True)
-                    ckey = full_cache_dir / key
-                    with open(ckey, "wb") as fo:
-                        fo.write(r.content)
 
-                    assert_checksum(ckey, package_info)
-
-                    upload_conda_package(ckey, remote_loc, channel)
-
-                    # delete the package
-                    for child in full_cache_dir.iterdir():
-                        if child.is_dir():
-                            child.rmdir()
-                        elif ".json" not in str(child):
-                            child.unlink(missing_ok=True)
-
+    # for t in tasks:
+    #     run_task(t)
+    with mp.Pool(processes=8) as pool:
+        pool.map(run_task, tasks)
 
 
 if __name__ == "__main__":
