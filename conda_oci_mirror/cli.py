@@ -39,4 +39,12 @@ def mirror(channel, subdirs, user, packages, host, cache_dir, dry_run):
     print(f"  Subdirs : {subdirs}")
     print(f"  Packages: {packages}")
     print(f"To: {host}/{user}")
-    _mirror([channel], subdirs, packages, f"user:{user}", host, cache_dir=cache_dir, dry_run=dry_run)
+    _mirror(
+        [channel],
+        subdirs,
+        packages,
+        f"user:{user}",
+        host,
+        cache_dir=cache_dir,
+        dry_run=dry_run,
+    )

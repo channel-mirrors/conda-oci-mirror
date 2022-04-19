@@ -1,3 +1,4 @@
+import fnmatch
 import hashlib
 import json
 import multiprocessing as mp
@@ -6,7 +7,6 @@ import pathlib
 import shutil
 import subprocess
 import time
-import fnmatch
 from tempfile import TemporaryDirectory
 
 import requests
@@ -234,7 +234,6 @@ class Task:
             self.file = None
             return self.retry()
 
-
         try:
             upload_conda_package(self.file, self.remote_loc, self.channel)
         except:
@@ -249,7 +248,9 @@ def run_task(t):
     return t.run()
 
 
-def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None, dry_run=False):
+def mirror(
+    channels, subdirs, packages, target_org_or_user, host, cache_dir=None, dry_run=False
+):
     if cache_dir is None:
         cache_dir = CACHE_DIR
     raw_user_or_org = target_org_or_user.split(":")[1]
@@ -270,7 +271,9 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
 
             for key, package_info in j["packages"].items():
                 if packages:
-                    if not any(fnmatch.fnmatch(package_info["name"], x) for x in packages):
+                    if not any(
+                        fnmatch.fnmatch(package_info["name"], x) for x in packages
+                    ):
                         continue
 
                 existing_packages = get_existing_packages(
