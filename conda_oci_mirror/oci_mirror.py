@@ -249,7 +249,7 @@ def run_task(t):
     return t.run()
 
 
-def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None):
+def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None, dry_run=False):
     if cache_dir is None:
         cache_dir = CACHE_DIR
     raw_user_or_org = target_org_or_user.split(":")[1]
@@ -278,6 +278,7 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                 )
 
                 if key not in existing_packages:
+                    print("Adding task for ", key)
                     tasks.append(
                         Task(
                             channel,
@@ -289,10 +290,9 @@ def mirror(channels, subdirs, packages, target_org_or_user, host, cache_dir=None
                         )
                     )
 
-    # for t in tasks:
-    #     run_task(t)
-    with mp.Pool(processes=8) as pool:
-        pool.map(run_task, tasks)
+    if not dry_run:
+        with mp.Pool(processes=8) as pool:
+            pool.map(run_task, tasks)
 
 
 if __name__ == "__main__":
