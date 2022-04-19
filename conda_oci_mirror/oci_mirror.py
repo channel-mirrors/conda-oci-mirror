@@ -223,9 +223,6 @@ class Task:
 
     def run(self):
 
-        if self.retries != 0:
-            self.retry_wait()
-
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         if not self.downloaded:
