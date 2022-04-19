@@ -199,7 +199,7 @@ class Task:
         self.cache_dir = cache_dir
         self.remote_loc = remote_loc
         self.retries = 0
-        self.downloaded = False
+        self.file = None
 
     def download_file(self):
         url = f"https://conda.anaconda.org/{self.channel}/{self.subdir}/{self.package}"
@@ -225,18 +225,18 @@ class Task:
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        if not self.downloaded:
-            file = self.download_file()
+        if not self.file or not self.file.exists():
+            self.file = self.download_file()
 
-            print(f"File downloaded: {file}")
-            if check_checksum(file, self.package_info) == False:
-                file.unlink()
-                return self.retry()
+        print(f"File downloaded: {self.file}")
+        if check_checksum(self.file, self.package_info) == False:
+            self.file.unlink()
+            self.file = None
+            return self.retry()
 
-        self.downloaded = True
 
         try:
-            upload_conda_package(file, self.remote_loc, self.channel)
+            upload_conda_package(self.file, self.remote_loc, self.channel)
         except:
             return self.retry()
 
