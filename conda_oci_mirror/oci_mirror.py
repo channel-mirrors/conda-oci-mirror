@@ -241,7 +241,7 @@ class Task:
 
         print(f"File uploaded to {self.remote_loc}")
         # delete the package
-        file.unlink()
+        self.file.unlink()
 
 
 def run_task(t):
