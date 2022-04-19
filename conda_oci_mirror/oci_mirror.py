@@ -5,6 +5,7 @@ import os
 import pathlib
 import shutil
 import subprocess
+import time
 from tempfile import TemporaryDirectory
 
 import requests
@@ -197,6 +198,7 @@ class Task:
         self.cache_dir = cache_dir
         self.remote_loc = remote_loc
         self.retries = 0
+        self.downloaded = False
 
     def download_file(self):
         url = f"https://conda.anaconda.org/{self.channel}/{self.subdir}/{self.package}"
@@ -208,26 +210,38 @@ class Task:
                     f.write(chunk)
         return fn
 
+    def retry(self):
+        time.sleep(2)
+        self.retries += 1
+        if self.retries > 3:
+            raise RuntimeError(
+                "Could not retrieve the correct file. Hashes not matching for 3 times"
+            )
+
+        return self.run()
+
     def run(self):
+
+        if self.retries != 0:
+            self.retry_wait()
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        file = self.download_file()
+        if not self.downloaded:
+            file = self.download_file()
 
-        print(f"File downloaded: {file}")
-        if check_checksum(file, self.package_info) == False:
-            self.retries += 1
+            print(f"File downloaded: {file}")
+            if check_checksum(file, self.package_info) == False:
+                file.unlink()
+                return self.retry()
 
-            file.unlink()
+        self.downloaded = True
 
-            if self.retries > 3:
-                raise RuntimeError(
-                    "Could not retrieve the correct file. Hashes not matching for 3 times"
-                )
+        try:
+            upload_conda_package(file, self.remote_loc, self.channel)
+        except:
+            return self.retry()
 
-            return self.run()
-
-        upload_conda_package(file, self.remote_loc, self.channel)
         print(f"File uploaded to {self.remote_loc}")
         # delete the package
         file.unlink()
