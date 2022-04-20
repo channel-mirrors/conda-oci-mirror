@@ -213,7 +213,7 @@ class Task:
                         f.write(chunk)
 
         except requests.exceptions.HTTPError as e:
-            if e.response.code == 503:
+            if e.response.status_code >= 500:
                 return self.retry(timeout=30)
             else:
                 raise e
