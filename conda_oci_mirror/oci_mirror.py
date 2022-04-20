@@ -305,9 +305,7 @@ def mirror(
                             remote_loc,
                         )
                     )
-                    # delete the package
-                    delete_dir(cache_dir)
-
+                    
     if not dry_run:
         with mp.Pool(processes=8) as pool:
             pool.map(run_task, tasks)
