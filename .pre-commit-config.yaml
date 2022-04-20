@@ -16,14 +16,7 @@ repos:
     rev: "3.8.4"
     hooks:
       - id: flake8
-<<<<<<< HEAD
-<<<<<<< HEAD
         args: [--ignore=E501]
-=======
->>>>>>> 6d88a18... add initial cli
-=======
-        args: [--ignore=E501]
->>>>>>> 0a10bbd... additional improvements
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v3.4.0
     hooks:

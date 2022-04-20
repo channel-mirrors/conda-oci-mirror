@@ -1,8 +1,6 @@
 import pathlib
 from multiprocessing import Process
-
 import click
-
 from conda_oci_mirror.oci_mirror import mirror as _mirror
 
 DEFAULT_SUBDIRS = [
@@ -29,16 +27,23 @@ def main():
 )
 @click.option("--user", default=None, help="Username for ghcr.io")
 @click.option("--host", default="ghcr.io", help="Host to push packages to")
+@click.option("--dry-run/--no-dry-run", default=False, help="Dry run?")
 @click.option(
     "--cache-dir", default=pathlib.Path.cwd() / "cache", help="Path to cache directory"
 )
-def mirror(channel, subdirs, user, packages, host, cache_dir):
+def mirror(channel, subdirs, user, packages, host, cache_dir, dry_run):
     cache_dir = pathlib.Path(cache_dir)
     print(f"Using cache dir: {cache_dir}")
     print(f"Mirroring : {channel}")
     print(f"  Subdirs : {subdirs}")
     print(f"  Packages: {packages}")
     print(f"To: {host}/{user}")
-
-    p = Process(target=_mirror, args=([channel], subdirs, packages, f"user:{user}", host, cache_dir))
-    p.start()
+    _mirror(
+        [channel],
+        subdirs,
+        packages,
+        f"user:{user}",
+        host,
+        cache_dir=cache_dir,
+        dry_run=dry_run,
+    )
