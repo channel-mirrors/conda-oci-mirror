@@ -193,14 +193,6 @@ def delete_dir(dir_path):
             sub.unlink()
 
 
-
-
-def get_existing_packages(oci, channel, subdir, package):
-    tags = get_existing_tags(oci, channel, subdir, package)
-
-    return set(f"{package}-{tag}.tar.bz2" for tag in tags)
-
-
 class Task:
     def __init__(self, channel, subdir, package, package_info, cache_dir, remote_loc):
         self.channel = channel
@@ -253,7 +245,7 @@ class Task:
         # delete the package
         self.file.unlink()
 
-        # delete the package
+        # delete all packages
         delete_dir(self.cache_dir)
 
 
