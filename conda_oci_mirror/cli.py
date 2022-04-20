@@ -1,5 +1,4 @@
 import pathlib
-from multiprocessing import Process
 import click
 from conda_oci_mirror.oci_mirror import mirror as _mirror
 
