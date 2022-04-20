@@ -204,15 +204,25 @@ class Task:
     def download_file(self):
         url = f"https://conda.anaconda.org/{self.channel}/{self.subdir}/{self.package}"
         fn = self.cache_dir / self.package
-        with requests.get(url, stream=True, allow_redirects=True) as r:
-            r.raise_for_status()
-            with open(fn, "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    f.write(chunk)
+
+        try:
+            with requests.get(url, stream=True, allow_redirects=True) as r:
+                r.raise_for_status()
+                with open(fn, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        f.write(chunk)
+
+        except requests.exceptions.HTTPError as e:
+            if e.response.code == 503:
+                return self.retry(timeout=30)
+            else:
+                raise e
+
         return fn
 
-    def retry(self):
-        time.sleep(2)
+    def retry(self, timeout=2):
+        print(f"Retrying in {timeout} seconds")
+        time.sleep(timeout)
         self.retries += 1
         if self.retries > 3:
             raise RuntimeError(
@@ -229,7 +239,7 @@ class Task:
             self.file = self.download_file()
 
         print(f"File downloaded: {self.file}")
-        if check_checksum(self.file, self.package_info) == False:
+        if check_checksum(self.file, self.package_info) is False:
             self.file.unlink()
             self.file = None
             return self.retry()
@@ -253,6 +263,7 @@ def mirror(
 ):
     if cache_dir is None:
         cache_dir = CACHE_DIR
+    print("Cache dir is: ", cache_dir)
     raw_user_or_org = target_org_or_user.split(":")[1]
     oci = OCI("https://ghcr.io", raw_user_or_org)
 
