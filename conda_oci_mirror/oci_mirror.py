@@ -253,8 +253,8 @@ class Task:
         # delete the package
         self.file.unlink()
 
-                    # delete the package
-                    delete_dir(cache_dir)
+        # delete the package
+        delete_dir(self.cache_dir)
 
 
 def run_task(t):
