@@ -64,6 +64,13 @@ def prepare_metadata(path_to_archive, upload_files_directory):
         shutil.copy(index_json, dest_dir / "info" / "index.json")
 
 
+def get_forbidden_packages():
+    j = requests.get(
+        "https://raw.githubusercontent.com/conda-forge/repodata-tools/main/repodata_tools/metadata.json"
+    ).json()
+    return j["undistributable"]
+
+
 def tag_format(tag):
     return tag.replace("+", "__p__").replace("!", "__e__")
 
@@ -254,7 +261,7 @@ class Task:
 
         try:
             upload_conda_package(self.file, self.remote_loc, self.channel)
-        except:
+        except Exception:
             return self.retry()
 
         print(f"File uploaded to {self.remote_loc}")
@@ -271,6 +278,12 @@ def mirror(
 ):
     if cache_dir is None:
         cache_dir = CACHE_DIR
+
+    if "conda-forge" in channels:
+        forbidden_packages = get_forbidden_packages()
+    else:
+        forbidden_packages = []
+
     print("Cache dir is: ", cache_dir)
     raw_user_or_org = target_org_or_user.split(":")[1]
     oci = OCI("https://ghcr.io", raw_user_or_org)
@@ -295,6 +308,9 @@ def mirror(
                     ):
                         continue
 
+                if package_info["name"] in forbidden_packages:
+                    continue
+
                 existing_packages = get_existing_packages(
                     oci, channel, subdir, package_info["name"]
                 )
@@ -318,19 +334,19 @@ def mirror(
 
 
 if __name__ == "__main__":
-
-    subdirs_to_mirror = [
-        "linux-64",
-        "osx-64",
-        "osx-arm64",
-        "win-64",
-        "linux-aarch64",
-        "linux-ppc64le",
-        "noarch",
-    ]
-    mirror(
-        ["conda-forge"], subdirs_to_mirror, ["xtensor", "pip"], "user:wolfv", "ghcr.io"
-    )
+    pass
+    # subdirs_to_mirror = [
+    #     "linux-64",
+    #     "osx-64",
+    #     "osx-arm64",
+    #     "win-64",
+    #     "linux-aarch64",
+    #     "linux-ppc64le",
+    #     "noarch",
+    # ]
+    # mirror(
+    #     ["conda-forge"], subdirs_to_mirror, ["xtensor", "pip"], "user:wolfv", "ghcr.io"
+    # )
 
     # oci = OCI('https://ghcr.io')
     # ns = "wolfv/conda-forge/osx-arm64/xtensor"
