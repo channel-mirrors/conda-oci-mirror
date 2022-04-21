@@ -229,13 +229,13 @@ class Task:
 
         except requests.exceptions.HTTPError as e:
             if e.response.status_code >= 500:
-                return self.retry(timeout=30)
+                return self.retry(timeout=30, target_func=self.download_file)
             else:
                 raise e
 
         return fn
 
-    def retry(self, timeout=2):
+    def retry(self, timeout=2, target_func=self.run):
         print(f"Retrying in {timeout} seconds")
         time.sleep(timeout)
         self.retries += 1
@@ -244,7 +244,7 @@ class Task:
                 "Could not retrieve the correct file. Hashes not matching for 3 times"
             )
 
-        return self.run()
+        return target_func()
 
     def run(self):
 
