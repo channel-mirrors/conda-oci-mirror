@@ -64,6 +64,14 @@ def prepare_metadata(path_to_archive, upload_files_directory):
         shutil.copy(index_json, dest_dir / "info" / "index.json")
 
 
+def tag_format(tag):
+    return tag.replace("+", "__p__").replace("!", "__e__")
+
+
+def reverse_tag_format(tag):
+    return tag.replace("__p__", "+").replace("__e__", "!")
+
+
 def upload_conda_package(path_to_archive, host, channel):
     path_to_archive = pathlib.Path(path_to_archive)
     package_name = get_package_name(path_to_archive)
@@ -85,7 +93,7 @@ def upload_conda_package(path_to_archive, host, channel):
         oras = ORAS(base_dir=upload_files_directory)
 
         name = package_name.rsplit("-", 2)[0]
-        version_and_build = "-".join(package_name.rsplit("-", 2)[1:])
+        version_and_build = tag_format("-".join(package_name.rsplit("-", 2)[1:]))
 
         with open(
             pathlib.Path(upload_files_directory) / package_name / "info" / "index.json",
@@ -179,7 +187,7 @@ def get_existing_tags(oci, channel, subdir, package):
     tags = oci.get_tags(gh_name)
 
     print(f"Found {len(tags)} existing tags for {gh_name}")
-
+    tags = [reverse_tag_format(t) for t in tags]
     existing_tags_cache[package] = tags
     return tags
 
