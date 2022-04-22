@@ -67,6 +67,8 @@ def push_new_packages(location, packages, subdirs, cache_dir, dry_run=False):
 
         if orig_repodata.exists():
             repodata = load_json(orig_repodata)
+        else:
+            repodata = {"packages": []}
 
         files = list(Path(sdir_cache).rglob("*.tar.bz2"))
         print(files)
