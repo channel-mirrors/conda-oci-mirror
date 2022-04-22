@@ -2,6 +2,7 @@ import pathlib
 
 import click
 
+from conda_oci_mirror.cache_packages import pull_latest_packages, push_new_packages
 from conda_oci_mirror.oci_mirror import mirror as _mirror
 
 DEFAULT_SUBDIRS = [
@@ -48,3 +49,40 @@ def mirror(channel, subdirs, user, packages, host, cache_dir, dry_run):
         cache_dir=cache_dir,
         dry_run=dry_run,
     )
+
+
+def push_pull_options(function):
+    function = click.option("--location", help="Username for ghcr.io")(function)
+    function = click.option("-s", "--subdir")(function)
+    function = click.option(
+        "-p",
+        "--packages",
+        help="Select packages for caching",
+        default=[],
+        multiple=True,
+    )(function)
+    function = click.option(
+        "--host", default="ghcr.io", help="Host to push packages to"
+    )(function)
+    function = click.option(
+        "--cache-dir",
+        default=pathlib.Path.cwd() / "cache",
+        help="Path to cache directory",
+    )(function)
+    function = click.option("--dry-run/--no-dry-run", default=False, help="Dry run?")(
+        function
+    )
+    return function
+
+
+@main.command()
+@push_pull_options
+def pull_cache(location, subdir, packages, host, cache_dir, dry_run):
+    print(subdir)
+    pull_latest_packages(f"{host}/{location}", packages, [subdir], cache_dir)
+
+
+@main.command()
+@push_pull_options
+def push_cache(location, subdir, packages, host, cache_dir, dry_run):
+    push_new_packages(f"{host}/{location}", packages, [subdir], cache_dir)

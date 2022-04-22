@@ -79,7 +79,7 @@ def reverse_tag_format(tag):
     return tag.replace("__p__", "+").replace("__e__", "!")
 
 
-def upload_conda_package(path_to_archive, host, channel):
+def upload_conda_package(path_to_archive, host, channel, extra_tags=None):
     path_to_archive = pathlib.Path(path_to_archive)
     package_name = get_package_name(path_to_archive)
 
@@ -113,6 +113,11 @@ def upload_conda_package(path_to_archive, host, channel):
         oras.push(
             f"{host}/{channel}/{subdir}/{name}", version_and_build, layers + metadata
         )
+
+        if extra_tags:
+            for t in extra_tags:
+                oras.push(f"{host}/{channel}/{subdir}/{name}", t, layers + metadata)
+
     return j
 
 

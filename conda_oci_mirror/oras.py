@@ -19,6 +19,11 @@ class ORAS:
         args = ["pull", location, "--media-type", media_type]
         return self.run(args)
 
+    def pull_tag(self, location, subdir, name, tag, media_type):
+        location = f"{location}/{subdir}/{name}:{tag}"
+        args = ["pull", location, "--media-type", media_type]
+        return self.run(args)
+
     def push(self, target, tag, layers, config=None):
         layer_opts = [f"{str(layer.file)}:{layer.media_type}" for layer in layers]
         dest = f"{target}:{tag}"
