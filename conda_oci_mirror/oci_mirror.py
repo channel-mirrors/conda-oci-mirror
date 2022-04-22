@@ -4,6 +4,7 @@ import json
 import multiprocessing as mp
 import os
 import pathlib
+import platform
 import shutil
 import subprocess
 import tarfile
