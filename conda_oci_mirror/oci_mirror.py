@@ -6,6 +6,7 @@ import os
 import pathlib
 import shutil
 import subprocess
+import tarfile
 import time
 from tempfile import TemporaryDirectory
 
@@ -25,14 +26,18 @@ from conda_oci_mirror.util import get_github_auth
 
 
 def compress_folder(source_dir, output_filename):
-    return subprocess.run(
-        f"tar -cvzf {output_filename} *",
-        cwd=source_dir,
-        shell=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=True,
-    )
+    if not platform.system() == "Windows":
+        return subprocess.run(
+            f"tar -cvzf {output_filename} *",
+            cwd=source_dir,
+            shell=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+    else:
+        with tarfile.open(output_filename, "w:gz") as tar:
+            tar.add(source_dir, arcname=".")
 
 
 def get_package_name(path_to_archive):
