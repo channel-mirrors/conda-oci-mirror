@@ -235,7 +235,10 @@ class Task:
 
         return fn
 
-    def retry(self, timeout=2, target_func=self.run):
+    def retry(self, timeout=2, target_func=None):
+        if not target_func:
+            target_func = self.run
+
         print(f"Retrying in {timeout} seconds")
         time.sleep(timeout)
         self.retries += 1
