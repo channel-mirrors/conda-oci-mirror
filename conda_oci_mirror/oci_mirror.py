@@ -98,10 +98,15 @@ def upload_conda_package(path_to_archive, host, channel, extra_tags=None):
             layers = [Layer(path_to_archive.name, package_tarbz2_media_type)]
         else:
             layers = [Layer(path_to_archive.name, package_conda_media_type)]
-        metadata = [
-            Layer(f"{package_name}/info.tar.gz", info_archive_media_type),
-            Layer(f"{package_name}/info/index.json", info_index_media_type),
-        ]
+
+        # creation of info.tar.gz _does not yet work on windows_ properly...
+        if platform.system() != "Windows":
+            metadata = [
+                Layer(f"{package_name}/info.tar.gz", info_archive_media_type),
+                Layer(f"{package_name}/info/index.json", info_index_media_type),
+            ]
+        else:
+            metadata = [Layer(f"{package_name}/info/index.json", info_index_media_type)]
 
         oras = ORAS(base_dir=upload_files_directory)
 
