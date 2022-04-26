@@ -1,7 +1,8 @@
 import fnmatch
 import hashlib
 import json
-import multiprocessing as mp
+
+# import multiprocessing as mp
 import os
 import pathlib
 import platform
@@ -348,8 +349,21 @@ def mirror(
                     )
 
     if not dry_run:
-        with mp.Pool(processes=8) as pool:
-            pool.map(run_task, tasks)
+        for task in tasks:
+            start = time.time()
+            task.run()
+            end = time.time()
+            elapsed = end - start
+
+            # This should at least take 20 seconds
+            # Otherwise we sleep a bit
+            if elapsed < 20:
+                print("Sleeping for ", 20 - elapsed)
+                time.sleep(20 - elapsed)
+
+        # This was going too fast
+        # with mp.Pool(processes=8) as pool:
+        #     pool.map(run_task, tasks)
 
 
 if __name__ == "__main__":
