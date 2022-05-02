@@ -1,5 +1,6 @@
 import fnmatch
 import hashlib
+from hmac import digest
 import json
 
 # import multiprocessing as mp
@@ -85,6 +86,41 @@ def tag_format(tag):
 def reverse_tag_format(tag):
     return tag.replace("__p__", "+").replace("__e__", "!")
 
+
+def create_manifest(_layers,_repodata_dict,usr_org):
+    url = f"https://ghcr.io/{usr_org}"
+    manifest_dict = {"layers":[]}
+
+    for layer in _layers:
+        _media_type = layer.media_type
+        _size = pathlib.Path(layer.file).stat().st_size
+        _digest = "sha256:" + _repodata_dict["packages"][layer.file]["sha256"]
+
+        infos = {"mediaType":_media_type,"size":_size,"digest":_digest}
+        manifest_dict["layers"].append(infos)
+
+    return manifest_dict
+
+#def push_image(_layers,_repoda, _oci):
+def push_image(user_or_org):
+    gh_session = requests.Session()
+    user_or_org, username_or_orgname = user_or_org.split(":")
+    gh_session.auth = get_github_auth(username_or_orgname)
+    
+    r = requests.post("https://ghcr.io/michaelkora/xtensor/blobs/upload")
+    j = r.json()
+    h=r.headers['location']
+    print (j)
+    print("########################################################")
+    print(h)
+    
+    
+    #r = requests.session.post(f"https://ghcr.io/{_oci.user_or_org}/{pkg_name}/blobs/upload")
+
+   # manifest = create_manifest(_layers,_repoda)
+
+    #for layer in _layers:
+    #    print (layer)
 
 def upload_conda_package(path_to_archive, host, channel, extra_tags=None):
     path_to_archive = pathlib.Path(path_to_archive)
@@ -347,6 +383,7 @@ def mirror(
                             remote_loc,
                         )
                     )
+                push_image(raw_user_or_org)
 
     if not dry_run:
         for task in tasks:
