@@ -392,7 +392,7 @@ def mirror(
                             remote_loc,
                         )
                     )
-                push_image(oci,key)
+                # push_image(oci,key)
 
     if not dry_run:
         for task in tasks:
