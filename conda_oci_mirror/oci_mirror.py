@@ -102,11 +102,12 @@ def create_manifest(_layers,_repodata_dict,usr_org):
     return manifest_dict
 
 #def push_image(_layers,_repoda, _oci):
-def push_image(user_or_org):
-    gh_session = requests.Session()
+def push_image(oci,package):
+    #gh_session = requests.Session()
     #user_or_org, username_or_orgname = user_or_org.split(":")
-    gh_session.auth = get_github_auth(user_or_org)
+    #gh_session.auth = get_github_auth(user_or_org)
     
+    oci.oci_auth(package, scope="pull")
     r = requests.post("https://ghcr.io/michaelkora/xtensor/blobs/upload")
     j = r.json()
     print (j)
@@ -383,7 +384,7 @@ def mirror(
                             remote_loc,
                         )
                     )
-                push_image(raw_user_or_org)
+                push_image(oci,key)
 
     if not dry_run:
         for task in tasks:
