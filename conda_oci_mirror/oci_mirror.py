@@ -103,12 +103,8 @@ def create_manifest(_layers,_repodata_dict,usr_org):
 
 #def push_image(_layers,_repoda, _oci):
 def push_image(oci,package):
-    #gh_session = requests.Session()
-    #user_or_org, username_or_orgname = user_or_org.split(":")
-    #gh_session.auth = get_github_auth(user_or_org)
-    
     gh_session = oci.oci_auth(package, scope="pull")
-    r = gh_session.post("https://ghcr.io/v2/michaelkora/xtensor/blobs/upload")
+    r = gh_session.post("https://ghcr.io/v2/MichaelKora/xtensor/blobs/upload")
     j = r.json()
     print (j)
     print("########################################################")
