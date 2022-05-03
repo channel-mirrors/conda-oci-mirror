@@ -104,7 +104,7 @@ def create_manifest(_layers,_repodata_dict,usr_org):
 #def push_image(_layers,_repoda, _oci):
 def push_image(oci,package):
     gh_session = oci.oci_auth(package, scope="pull")
-    r = gh_session.post("https://ghcr.io/v2/michaelkora/xtensor/blobs/upload")
+    r = gh_session.post("https://ghcr.io/v2/michaelkora/xtensor/blobs/uploads/")
     j = r.json()
     print (j)
     print("########################################################")
