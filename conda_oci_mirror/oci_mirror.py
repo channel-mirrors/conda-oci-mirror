@@ -107,8 +107,8 @@ def push_image(oci,package):
     #user_or_org, username_or_orgname = user_or_org.split(":")
     #gh_session.auth = get_github_auth(user_or_org)
     
-    oci.oci_auth(package, scope="pull")
-    r = requests.post("https://ghcr.io/michaelkora/xtensor/blobs/upload")
+    gh_session = oci.oci_auth(package, scope="pull")
+    r = gh_session.post("https://ghcr.io/v2/michaelkora/xtensor/blobs/upload")
     j = r.json()
     print (j)
     print("########################################################")
