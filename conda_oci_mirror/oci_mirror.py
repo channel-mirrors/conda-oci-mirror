@@ -123,8 +123,8 @@ def push_image(oci,package, _layers):
     print(headers)
     location = headers['location']
 
-    with open("file", "rb") as f:
-        gh_session.put("https://ghcr.io" + location, data=f)
+    #with open("file", "rb") as f:
+    #    gh_session.put("https://ghcr.io" + location, data=f)
     
     for layer in _layers:
         digest = sha256sum(layer.file)
