@@ -131,7 +131,7 @@ def push_image(oci,package, _layers):
         print (f"push url is : {push_url}")
     
     
-def upload_conda_package(path_to_archive, host, channel, extra_tags=None):
+def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
     path_to_archive = pathlib.Path(path_to_archive)
     package_name = get_package_name(path_to_archive)
 
@@ -314,7 +314,7 @@ class Task:
 
         return target_func()
 
-    def run(self):
+    def run(self, oci):
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -328,7 +328,7 @@ class Task:
             return self.retry()
 
         try:
-            upload_conda_package(self.file, self.remote_loc, self.channel)
+            upload_conda_package(self.file, self.remote_loc, self.channel, oci)
         except Exception:
             return self.retry()
 
@@ -400,7 +400,7 @@ def mirror(
     if not dry_run:
         for task in tasks:
             start = time.time()
-            task.run()
+            task.run(oci)
             end = time.time()
             elapsed = end - start
 
