@@ -166,6 +166,7 @@ def upload_conda_package(path_to_archive, host, channel, extra_tags=None):
             subdir = j["subdir"]
 
         print("Pushing: ", f"{host}/{channel}/{subdir}/{name}")
+        print(f"#######name pkg = {name}")
         oras.push(
             f"{host}/{channel}/{subdir}/{name}", version_and_build, layers + metadata
         )
