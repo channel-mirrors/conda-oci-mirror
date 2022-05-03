@@ -114,9 +114,9 @@ def sha256sum(path):
 #def push_image(_layers,_repoda, _oci):
 def push_image(oci,package, _layers):
     gh_session = oci.oci_auth(package, scope="pull")
-    pkg_n= str(package).rsplit(".",4)[0]
-    pkg_name = pkg_n.rsplit("-",1)[0]
-
+    #pkg_n= str(package).rsplit(".",4)[0]
+    #pkg_name = pkg_n.rsplit("-",1)[0]
+    pkg_name = package
     r = gh_session.post(f"https://ghcr.io/v2/{oci.user_or_org}/{pkg_name}/blobs/uploads/")
     headers = r.headers
     location = headers['location']
@@ -128,6 +128,7 @@ def push_image(oci,package, _layers):
         digest = sha256sum(layer.file)
         print(digest)
         push_url = f"https://ghcr.io{location}?digest={digest}"
+        print (f"push url is : {push_url}")
     
     
 def upload_conda_package(path_to_archive, host, channel, extra_tags=None):
@@ -166,10 +167,12 @@ def upload_conda_package(path_to_archive, host, channel, extra_tags=None):
             subdir = j["subdir"]
 
         print("Pushing: ", f"{host}/{channel}/{subdir}/{name}")
-        print(f"#######name pkg = {name}")
-        oras.push(
-            f"{host}/{channel}/{subdir}/{name}", version_and_build, layers + metadata
-        )
+        
+        push_image(oci,name,layers)
+
+        #oras.push(
+        #    f"{host}/{channel}/{subdir}/{ngame}", version_and_build, layers + metadata
+        #)
 
         if extra_tags:
             for t in extra_tags:
