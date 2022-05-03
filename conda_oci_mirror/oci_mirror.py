@@ -109,9 +109,9 @@ def push_image(user_or_org):
     
     r = requests.post("https://ghcr.io/michaelkora/xtensor/blobs/upload")
     j = r.json()
-    h=r.headers['location']
     print (j)
     print("########################################################")
+    h=r.headers['location']
     print(h)
     
     
