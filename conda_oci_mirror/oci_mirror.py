@@ -101,27 +101,35 @@ def create_manifest(_layers,_repodata_dict,usr_org):
 
     return manifest_dict
 
+def sha256sum(path):
+    hash_func = hashlib.sha256()
+
+    with open(path, "rb") as f:
+        # Read and update hash string value in blocks of 4K
+        for byte_block in iter(lambda: f.read(4096), b""):
+            hash_func.update(byte_block)
+
+    return hash_func.hexdigest()
+
 #def push_image(_layers,_repoda, _oci):
-def push_image(oci,package):
+def push_image(oci,package, _layers):
     gh_session = oci.oci_auth(package, scope="pull")
-    print (f"packkkage: {package}")
-    r = gh_session.post("https://ghcr.io/v2/michaelkora/xtensor/blobs/uploads/")
-    j = r.headers
-    print (j)
-    print("########################################################")
-    location = j['location']
-    print(location)
+    pkg_n= str(package).rsplit(".",4)[0]
+    pkg_name = pkg_n.rsplit("-",1)[0]
+
+    r = gh_session.post(f"https://ghcr.io/v2/{oci.user_or_org}/{pkg_name}/blobs/uploads/")
+    headers = r.headers
+    location = headers['location']
+
     with open("file", "rb") as f:
         gh_session.put("https://ghcr.io" + location, data=f)
     
+    for layer in _layers:
+        digest = sha256sum(layer.file)
+        print(digest)
+        push_url = f"https://ghcr.io{location}?digest={digest}"
     
-    #r = requests.session.post(f"https://ghcr.io/{_oci.user_or_org}/{pkg_name}/blobs/upload")
-
-   # manifest = create_manifest(_layers,_repoda)
-
-    #for layer in _layers:
-    #    print (layer)
-
+    
 def upload_conda_package(path_to_archive, host, channel, extra_tags=None):
     path_to_archive = pathlib.Path(path_to_archive)
     package_name = get_package_name(path_to_archive)
