@@ -140,8 +140,8 @@ def push_image(_base_path, oci,package, _layers):
 
         _headers = { "Content-Length": _size,"Content-Type": "application/octet-stream"}
         
-        with open("file", "rb") as f:
-            r2 = gh_session.put(push_url, data=layer_path, headers=_headers)
+        with open(layer_path, "rb") as f:
+            r2 = gh_session.put(push_url, data=f, headers=_headers)
         print("+++++++++result")
         print(r2)
         print("+++end of result")
