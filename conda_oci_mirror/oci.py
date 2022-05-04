@@ -1,10 +1,11 @@
+import pathlib
 import tarfile
 from io import BytesIO
 
 import requests
 
 from conda_oci_mirror import constants as C
-from conda_oci_mirror.util import get_github_auth
+from conda_oci_mirror.util import get_github_auth, sha256sum
 
 
 class OCI:
@@ -104,3 +105,40 @@ class OCI:
     def get_index_json(self, package, tag):
         digest = self._find_digest(package, tag, C.info_index_media_type)
         return self.get_blob(package, digest).json()
+
+    def push_image(self, package, layers):
+        manifest_dict = {"layers": []}
+
+        gh_session = self.oci_auth(package, scope="push,pull")
+        r = gh_session.post(
+            f"https://ghcr.io/v2/{self.user_or_org}/{package}/blobs/uploads/"
+        )
+        headers = r.headers
+        location = headers["location"]
+        print(f"!! location: {location}")
+
+        for layer in layers:
+            _media_type = layer.media_type
+            _size = pathlib.Path(layer.file).stat().st_size
+            digest = sha256sum(layer.file)
+            manifest_digest = "sha256:" + digest
+            print(manifest_digest)
+            infos = {"mediaType": _media_type, "size": _size, "digest": manifest_digest}
+
+            manifest_dict["layers"].append(infos)
+
+            push_url = f"https://ghcr.io{location}?digest={manifest_digest}"
+            print(f"push url is : {push_url}")
+
+            _headers = {
+                "Content-Length": str(_size),
+                "Content-Type": "application/octet-stream",
+            }
+
+            with open(layer.file, "rb") as f:
+                r2 = gh_session.put(push_url, data=f, headers=_headers)
+                print("+++++++++result")
+                print(r2)
+                print(r2.content)
+                print("+++end of result")
+        # push the manifest
