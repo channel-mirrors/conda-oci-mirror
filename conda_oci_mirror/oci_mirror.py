@@ -113,13 +113,14 @@ def sha256sum(path):
 
 #def push_image(_layers,_repoda, _oci):
 def push_image(oci,package, _layers):
-    print("!!!!!!!in oush image")
+    print("!!!!!!!in push image")
     gh_session = oci.oci_auth(package, scope="pull")
     #pkg_n= str(package).rsplit(".",4)[0]
     #pkg_name = pkg_n.rsplit("-",1)[0]
     pkg_name = package
     r = gh_session.post(f"https://ghcr.io/v2/{oci.user_or_org}/{pkg_name}/blobs/uploads/")
     headers = r.headers
+    print (f"type {type(headers)}")
     print(headers)
     location = headers['location']
 
