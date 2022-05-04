@@ -112,25 +112,36 @@ def sha256sum(path):
     return hash_func.hexdigest()
 
 def push_image(_base_path, oci,package, _layers):
-    print("!!!!!!!in push image: {package}")
+    manifest_dict = {"layers":[]}
+
     gh_session = oci.oci_auth(package, scope="pull")
-    #pkg_n= str(package).rsplit(".",4)[0]
-    #pkg_name = pkg_n.rsplit("-",1)[0]
     pkg_name = package
     r = gh_session.post(f"https://ghcr.io/v2/{oci.user_or_org}/{pkg_name}/blobs/uploads/")
     headers = r.headers
-    print (f"type {type(headers)}")
-    print(headers)
     location = headers['location']
+    print (f"!! location: {location}")
 
     #with open("file", "rb") as f:
     #    gh_session.put("https://ghcr.io" + location, data=f)
     
+
     for layer in _layers:
-        digest = sha256sum(_base_path / layer.file)
-        print(digest)
+        layer_path = _base_path / layer.file
+        _media_type = layer.media_type
+        _size = pathlib.Path(layer_path).stat().st_size
+        digest = sha256sum(layer_path)
+        manifest_digest = "sha256:" + digest
+        
+        infos = {"mediaType":_media_type,"size":_size,"digest":manifest_digest}
+        manifest_dict["layers"].append(infos)
+        
         push_url = f"https://ghcr.io{location}?digest={digest}"
         print (f"push url is : {push_url}")
+
+        r2 = gh_session.put(push_url)
+        print("+++++++++result")
+        print(r2)
+        print("+++end of result")
     
     
 def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
