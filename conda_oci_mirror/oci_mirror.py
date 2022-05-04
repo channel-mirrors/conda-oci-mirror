@@ -111,9 +111,8 @@ def sha256sum(path):
 
     return hash_func.hexdigest()
 
-#def push_image(_layers,_repoda, _oci):
 def push_image(oci,package, _layers):
-    print("!!!!!!!in push image")
+    print("!!!!!!!in push image: {package}")
     gh_session = oci.oci_auth(package, scope="pull")
     #pkg_n= str(package).rsplit(".",4)[0]
     #pkg_name = pkg_n.rsplit("-",1)[0]
@@ -170,7 +169,7 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
             subdir = j["subdir"]
 
         print("Pushing: ", f"{host}/{channel}/{subdir}/{name}") 
-        print (f"## Path is: {path_to_archive}")
+        print (f"## Path dir is: {upload_files_directory} ")
         push_image( oci,name,layers)
 
         #oras.push(
