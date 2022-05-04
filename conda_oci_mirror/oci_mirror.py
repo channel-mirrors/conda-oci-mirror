@@ -1,6 +1,5 @@
 import fnmatch
 import hashlib
-from hmac import digest
 import json
 
 # import multiprocessing as mp
@@ -11,6 +10,7 @@ import shutil
 import subprocess
 import tarfile
 import time
+from hmac import digest
 from tempfile import TemporaryDirectory
 
 import requests
@@ -138,7 +138,10 @@ def push_image(_base_path, oci,package, _layers):
         push_url = f"https://ghcr.io{location}?digest={digest}"
         print (f"push url is : {push_url}")
 
-        r2 = gh_session.put(push_url)
+        _headers = { "Content-Length": os.path.getsize("myfile.txt"),"Content-Type": "application/octet-stream"}
+        
+        with open("file", "rb") as f:
+            r2 = gh_session.put(push_url, data=layer_path, headers=_headers)
         print("+++++++++result")
         print(r2)
         print("+++end of result")
