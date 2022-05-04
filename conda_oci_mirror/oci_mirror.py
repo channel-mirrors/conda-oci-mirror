@@ -169,9 +169,10 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
             j = json.load(fi)
             subdir = j["subdir"]
 
-        print("Pushing: ", f"{host}/{channel}/{subdir}/{name}")
+        print("Pushing: ", f"{host}/{channel}/{subdir}/{name}") 
+        print ( f"location is: {oras.base_dir}")
         
-        push_image(oci,name,layers)
+        push_image( oci,name,layers)
 
         #oras.push(
         #    f"{host}/{channel}/{subdir}/{ngame}", version_and_build, layers + metadata
@@ -278,7 +279,7 @@ class Task:
         self.channel = channel
         self.subdir = subdir
         self.package = package
-        self.package_info = package_info
+        self.packagel_info = package_info
         self.cache_dir = cache_dir
         self.remote_loc = remote_loc
         self.retries = 0
