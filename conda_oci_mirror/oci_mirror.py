@@ -138,7 +138,7 @@ def push_image(_base_path, oci,package, _layers):
         push_url = f"https://ghcr.io{location}?digest={digest}"
         print (f"push url is : {push_url}")
 
-        _headers = { "Content-Length": _size,"Content-Type": "application/octet-stream"}
+        _headers = { "Content-Length": str(_size),"Content-Type": "application/octet-stream"}
         
         with open(layer_path, "rb") as f:
             r2 = gh_session.put(push_url, data=f, headers=_headers)
