@@ -170,9 +170,7 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
             subdir = j["subdir"]
 
         print("Pushing: ", f"{host}/{channel}/{subdir}/{name}") 
-        print ( f"!!!location is: {oras.base_dir}")
-        subprocess.run(f"ls -al {oras.base_dir}", shell=True)
-        
+        print (f"## Path is: {path_to_archive}")
         push_image( oci,name,layers)
 
         #oras.push(
