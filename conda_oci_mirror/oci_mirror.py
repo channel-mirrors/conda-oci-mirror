@@ -111,7 +111,7 @@ def sha256sum(path):
 
     return hash_func.hexdigest()
 
-def push_image(oci,package, _layers):
+def push_image(_base_path, oci,package, _layers):
     print("!!!!!!!in push image: {package}")
     gh_session = oci.oci_auth(package, scope="pull")
     #pkg_n= str(package).rsplit(".",4)[0]
@@ -127,7 +127,7 @@ def push_image(oci,package, _layers):
     #    gh_session.put("https://ghcr.io" + location, data=f)
     
     for layer in _layers:
-        digest = sha256sum(layer.file)
+        digest = sha256sum(_base_path / layer.file)
         print(digest)
         push_url = f"https://ghcr.io{location}?digest={digest}"
         print (f"push url is : {push_url}")
@@ -169,8 +169,10 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
             subdir = j["subdir"]
 
         print("Pushing: ", f"{host}/{channel}/{subdir}/{name}") 
-        print (f"## Path dir is: {upload_files_directory} ")
-        push_image( oci,name,layers)
+        print (f"## Path dir is: {path_to_archive} ")
+        prefix = str(path_to_archive).rsplit("/",1)[0]
+        
+        push_image(pathlib.Path(prefix), oci,name,layers)
 
         #oras.push(
         #    f"{host}/{channel}/{subdir}/{ngame}", version_and_build, layers + metadata
