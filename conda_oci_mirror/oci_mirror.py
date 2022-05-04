@@ -121,9 +121,6 @@ def push_image(_base_path, oci,package, _layers):
     location = headers['location']
     print (f"!! location: {location}")
 
-    #with open("file", "rb") as f:
-    #    gh_session.put("https://ghcr.io" + location, data=f)
-    
 
     for layer in _layers:
         layer_path = _base_path / layer.file
@@ -135,7 +132,7 @@ def push_image(_base_path, oci,package, _layers):
         infos = {"mediaType":_media_type,"size":_size,"digest":manifest_digest}
         manifest_dict["layers"].append(infos)
         
-        push_url = f"https://ghcr.io{location}?digest={digest}"
+        push_url = f"https://ghcr.io{location}?digest={manifest_digest}"
         print (f"push url is : {push_url}")
 
         _headers = { "Content-Length": str(_size),"Content-Type": "application/octet-stream"}
@@ -145,6 +142,7 @@ def push_image(_base_path, oci,package, _layers):
             print("+++++++++result")
             print(r2)
             print("+++end of result")
+    # push the manifest
     
     
 def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
