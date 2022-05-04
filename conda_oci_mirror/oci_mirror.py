@@ -326,7 +326,7 @@ class Task:
             self.file = self.download_file()
 
         print(f"File downloaded: {self.file}")
-        if check_checksum(self.file, self.package_info) is False:
+        if check_checksum(self.file, self.packagel_info) is False:
             self.file.unlink()
             self.file = None
             return self.retry()
