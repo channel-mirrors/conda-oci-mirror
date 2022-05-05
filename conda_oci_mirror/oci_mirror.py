@@ -134,6 +134,7 @@ def push_image(_base_path, oci,package, _layers):
     pkg_name = package
     r = gh_session.post(f"https://ghcr.io/v2/{oci.user_or_org}/{pkg_name}/blobs/uploads/")
     headers = r.headers
+    print (headers)
     location = headers['location']
     print (f"!! location: {location}")
 
