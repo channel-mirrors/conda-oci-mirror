@@ -87,20 +87,6 @@ def reverse_tag_format(tag):
     return tag.replace("__p__", "+").replace("__e__", "!")
 
 
-def create_manifest(_layers,_repodata_dict,usr_org):
-    url = f"https://ghcr.io/{usr_org}"
-    manifest_dict = {"layers":[]}
-
-    for layer in _layers:
-        _media_type = layer.media_type
-        _size = pathlib.Path(layer.file).stat().st_size
-        _digest = "sha256:" + _repodata_dict["packages"][layer.file]["sha256"]
-
-        infos = {"mediaType":_media_type,"size":_size,"digest":_digest}
-        manifest_dict["layers"].append(infos)
-
-    return manifest_dict
-
 def sha256sum(path):
     hash_func = hashlib.sha256()
 
@@ -124,21 +110,14 @@ def compute_hashlib(fn):
     return curr_sha.hexdigest()
 
 def push_image(_base_path, oci,package, _layers):
-    # manifest_dict = {"layers":[],"annotations":{}}
 
-    manifest_dict = {"schemaVersion":2,"mediaType": "application/vnd.oci.image.manifest.v1+json","config":{}, "layers":[],"annotations":{}}
-
-
-    
+    manifest_dict = {"schemaVersion":2,"mediaType": "application/vnd.oci.image.manifest.v1+json","config":{}, "layers":[],"annotations":{}}    
     gh_session = oci.oci_auth(package, scope="pull")
     pkg_name = package
     r = gh_session.post(f"https://ghcr.io/v2/{oci.user_or_org}/{pkg_name}/blobs/uploads/")
     headers = r.headers
-    print (headers)
     location = headers['location']
-    print (f"!! location: {location}")
-
-
+    
     for layer in _layers:
         layer_path = _base_path / layer.file
         
@@ -158,14 +137,12 @@ def push_image(_base_path, oci,package, _layers):
         
         with open(str(layer_path), "rb") as f:
             r2 = gh_session.put(push_url, data=f, headers=_headers)
-            print("+++++++++result")
+            print ("response for the currrent layer")
             print(r2.content)
-            print("+++end of result")
-    
+
     manifest_dict["annotations"]["org.opencontainers.image.description"] = "start Description"
     manifest_path = _base_path / "manifest.json"
-    print (f"!!! The path is {str(manifest_path)}")
-
+    
     conf = {"mediaType": "application/vnd.oci.image.config.v1+json","size": 7023, "digest": "sha256:b5b2b2c507a0944348e0303114d8d93aaaa081732b86451d9bce1f432a537bc7"}
     manifest_dict ["config"] = conf
 
@@ -183,11 +160,9 @@ def push_image(_base_path, oci,package, _layers):
     with open(manifest_path, "w") as write_file:
         json.dump(manifest_dict, write_file)
 
-    print("!!!the manifest")
+    print("!! The manifest: ")
     print (json.dumps(manifest_dict, indent=4))
 
-    #_manfst_size = pathlib.Path(manifest_path).stat().st_size
-    #_mnfst_headers = { "Content-Length": str(_manfst_size),"Content-Type": "application/json"}
     _mnfst_headers = { "Content-Type": "application/vnd.oci.image.manifest.v1+json"}
     ref = pkg_name + "-" + "latest"
     mnfst_url = f"https://ghcr.io/v2/{oci.user_or_org}/{pkg_name}/manifests/{ref}"
@@ -195,17 +170,10 @@ def push_image(_base_path, oci,package, _layers):
     print("??????? uploading the manifest")
     with open(str(manifest_path), "rb") as f:
         r_manfst = gh_session.put(mnfst_url, data=f, headers=_mnfst_headers)
-        print ("### result manifest")
+        print ("manifest upload response: ")
         print (r_manfst)
-        print ("### end of rslt")
 
 
-
-        
-
-    # push the manifest
-    
-    
 def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
     path_to_archive = pathlib.Path(path_to_archive)
     package_name = get_package_name(path_to_archive)
