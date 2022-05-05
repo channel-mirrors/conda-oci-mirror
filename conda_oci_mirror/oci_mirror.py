@@ -111,8 +111,20 @@ def sha256sum(path):
 
     return hash_func.hexdigest()
 
+
+def compute_hashlib(fn):
+    BUF_SIZE = 65536
+    curr_sha = hashlib.sha1()
+    with open(fn, 'rb') as f:
+        while True:
+            _dt = f.read(BUF_SIZE)
+            if not _dt:
+                break
+            curr_sha.update(_dt)
+    return curr_sha.hexdigest()
+
 def push_image(_base_path, oci,package, _layers):
-    manifest_dict = {"layers":[]}
+    manifest_dict = {"layers":[],"annotations":{}}
 
     gh_session = oci.oci_auth(package, scope="pull")
     pkg_name = package
@@ -124,12 +136,14 @@ def push_image(_base_path, oci,package, _layers):
 
     for layer in _layers:
         layer_path = _base_path / layer.file
+        
+        #update the manifest
         _media_type = layer.media_type
         _size = pathlib.Path(layer_path).stat().st_size
         digest = sha256sum(layer_path)
         manifest_digest = "sha256:" + digest
-        
-        infos = {"mediaType":_media_type,"size":_size,"digest":manifest_digest}
+        _hash_value = compute_hashlib(str(layer_path))
+        infos = {"mediaType":_media_type,"size":_size,"digest":manifest_digest, "hashlib":_hash_value}
         manifest_dict["layers"].append(infos)
         
         push_url = f"https://ghcr.io{location}?digest={manifest_digest}"
@@ -140,8 +154,32 @@ def push_image(_base_path, oci,package, _layers):
         with open(str(layer_path), "rb") as f:
             r2 = gh_session.put(push_url, data=f, headers=_headers)
             print("+++++++++result")
-            print(r2)
+            print(r2.content)
             print("+++end of result")
+    
+    manifest_dict["annotations"]["org.opencontainers.image.description"] = "start Description"
+    manifest_path = _base_path / "manifest.json"
+    print (f"!!! The path is {str(manifest_path)}")
+
+    with open(manifest_path, "w") as write_file:
+        json.dump(manifest_dict, write_file)
+    
+    #_manfst_size = pathlib.Path(manifest_path).stat().st_size
+    #_mnfst_headers = { "Content-Length": str(_manfst_size),"Content-Type": "application/json"}
+    _mnfst_headers = { "Content-Type": "application/json"}
+    ref = pkg_name + "-" + "latest"
+    mnfst_url = f"https://ghcr.io/v2/{oci.user_or_org}/{pkg_name}/manifests/{ref}"
+    
+    with open(str(manifest_path), "rb") as f:
+        r_manfst = gh_session.put(mnfst_url, data=f, headers=_mnfst_headers)
+        print ("### result manifest")
+        print (r_manfst.content)
+        print ("### end of rslt")
+
+
+
+        
+
     # push the manifest
     
     
