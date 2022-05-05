@@ -117,7 +117,7 @@ def push_image(_base_path, oci,package, _layers):
     r = gh_session.post(f"https://ghcr.io/v2/{oci.user_or_org}/{pkg_name}/blobs/uploads/")
     headers = r.headers
     location = headers['location']
-    
+    print(f"layer Size: {len(_layers)}")
     for layer in _layers:
         layer_path = _base_path / layer.file
         
