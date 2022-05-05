@@ -124,8 +124,12 @@ def compute_hashlib(fn):
     return curr_sha.hexdigest()
 
 def push_image(_base_path, oci,package, _layers):
-    manifest_dict = {"layers":[],"annotations":{}}
+    # manifest_dict = {"layers":[],"annotations":{}}
 
+    manifest_dict = {"schemaVersion":2,"mediaType": "application/vnd.oci.image.manifest.v1+json","config":{}, "layers":[],"annotations":{}}
+
+
+    
     gh_session = oci.oci_auth(package, scope="pull")
     pkg_name = package
     r = gh_session.post(f"https://ghcr.io/v2/{oci.user_or_org}/{pkg_name}/blobs/uploads/")
@@ -141,12 +145,12 @@ def push_image(_base_path, oci,package, _layers):
         _media_type = layer.media_type
         _size = pathlib.Path(layer_path).stat().st_size
         digest = sha256sum(layer_path)
-        manifest_digest = "sha256:" + digest
+        _digest = "sha256:" + digest
         _hash_value = compute_hashlib(str(layer_path))
-        infos = {"mediaType":_media_type,"size":_size,"digest":manifest_digest, "hashlib":_hash_value}
+        infos = {"mediaType":_media_type,"size":_size,"digest":_digest, "hashlib":_hash_value}
         manifest_dict["layers"].append(infos)
         
-        push_url = f"https://ghcr.io{location}?digest={manifest_digest}"
+        push_url = f"https://ghcr.io{location}?digest={_digest}"
         print (f"push url is : {push_url}")
 
         _headers = { "Content-Length": str(_size),"Content-Type": "application/octet-stream"}
@@ -161,12 +165,27 @@ def push_image(_base_path, oci,package, _layers):
     manifest_path = _base_path / "manifest.json"
     print (f"!!! The path is {str(manifest_path)}")
 
+    conf = {"mediaType": "application/vnd.oci.image.config.v1+json","size": 7023, "digest": "sha256:b5b2b2c507a0944348e0303114d8d93aaaa081732b86451d9bce1f432a537bc7"}
+    manifest_dict ["config"] = conf
+
+
     with open(manifest_path, "w") as write_file:
         json.dump(manifest_dict, write_file)
     
+    mnfst_size = pathlib.Path(manifest_path).stat().st_size
+    mnfst_digest = sha256sum(manifest_path)
+    _mnfst_digest = "sha256:" + mnfst_digest
+
+    manifest_dict ["config"]["size"] = mnfst_size
+    manifest_dict ["config"]["digest"] = _mnfst_digest
+    
+    with open(manifest_path, "w") as write_file:
+        json.dump(manifest_dict, write_file)
+
+
     #_manfst_size = pathlib.Path(manifest_path).stat().st_size
     #_mnfst_headers = { "Content-Length": str(_manfst_size),"Content-Type": "application/json"}
-    _mnfst_headers = { "Content-Type": "application/json"}
+    _mnfst_headers = { "Content-Type": "application/vnd.oci.image.manifest.v1+json"}
     ref = pkg_name + "-" + "latest"
     mnfst_url = f"https://ghcr.io/v2/{oci.user_or_org}/{pkg_name}/manifests/{ref}"
     
