@@ -183,6 +183,8 @@ def push_image(_base_path, oci,package, _layers):
     with open(manifest_path, "w") as write_file:
         json.dump(manifest_dict, write_file)
 
+    print("!!!the manifest")
+    print (json.dumps(manifest_dict, indent=4))
 
     #_manfst_size = pathlib.Path(manifest_path).stat().st_size
     #_mnfst_headers = { "Content-Length": str(_manfst_size),"Content-Type": "application/json"}
@@ -190,10 +192,11 @@ def push_image(_base_path, oci,package, _layers):
     ref = pkg_name + "-" + "latest"
     mnfst_url = f"https://ghcr.io/v2/{oci.user_or_org}/{pkg_name}/manifests/{ref}"
     
+    print("??????? uploading the manifest")
     with open(str(manifest_path), "rb") as f:
         r_manfst = gh_session.put(mnfst_url, data=f, headers=_mnfst_headers)
         print ("### result manifest")
-        print (r_manfst.content)
+        print (r_manfst)
         print ("### end of rslt")
 
 
