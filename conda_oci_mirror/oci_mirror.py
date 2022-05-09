@@ -129,7 +129,7 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
         prefix = upload_files_directory
         remote_location = f"{channel}/{subdir}"
         reference = "latest"
-        oci.push_image(pathlib.Path(prefix), remote_location, name, reference, layers + metadata)
+        oci.push_image(pathlib.Path(prefix), remote_location, name, version_and_build, layers + metadata)
 
         #oras.push(
         #    f"{host}/{channel}/{subdir}/{name}", version_and_build, layers + metadata
