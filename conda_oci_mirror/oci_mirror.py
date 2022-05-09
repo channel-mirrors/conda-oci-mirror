@@ -105,7 +105,7 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
         # creation of info.tar.gz _does not yet work on windows_ properly...
         if platform.system() != "Windows":
             metadata = [
-                Layer(f"{package_name}/info.tar.gz", info_archive_media_type),
+                Layer(f"{package_name}/info.tar.sgz", info_archive_media_type),
                 Layer(f"{package_name}/info/index.json", info_index_media_type),
             ]
         else:
@@ -125,10 +125,11 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
 
         print("Pushing: ", f"{host}/{channel}/{subdir}/{name}") 
         print (f"## Path dir is: {path_to_archive} ")
-        prefix = str(path_to_archive).rsplit("/",1)[0]
-        
+        # prefix = str(path_to_archive).rsplit("/",1)[0]
+        prefix = upload_files_directory
         remote_location = f"{channel}/{subdir}"
-        oci.push_image(pathlib.Path(prefix),remote_location,name,layers + metadata)
+        reference = "latest"
+        oci.push_image(pathlib.Path(prefix), remote_location, name, reference, layers + metadata)
 
         #oras.push(
         #    f"{host}/{channel}/{subdir}/{name}", version_and_build, layers + metadata
@@ -137,7 +138,7 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
         if extra_tags:
             for t in extra_tags:
                 oras.push(f"{host}/{channel}/{subdir}/{name}", t, layers + metadata)
-
+    print (f"========>l = {len(layers)}")
     return j
 
 

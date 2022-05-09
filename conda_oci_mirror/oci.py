@@ -109,7 +109,7 @@ class OCI:
         digest = self._find_digest(package, tag, C.info_index_media_type)
         return self.get_blob(package, digest).json()
 
-    def push_image(self, _base_path,remote_location, package, _layers):
+    def push_image(self, _base_path,remote_location, package, _reference, _layers):
 
         manifest_dict = {"schemaVersion":2,"mediaType": "application/vnd.oci.image.manifest.v1+json","config":{}, "layers":[],"annotations":{}}    
         gh_session = self.oci_auth(package, scope="push,pull")
@@ -165,7 +165,7 @@ class OCI:
         print (json.dumps(manifest_dict, indent=4))
 
         _mnfst_headers = { "Content-Type": "application/vnd.oci.image.manifest.v1+json"}
-        ref = "latest"
+        ref = _reference
         mnfst_url = f"https://ghcr.io/v2/{self.user_or_org}/{remote_location}/{pkg_name}/manifests/{ref}"
 
         print("??????? uploading the manifest")
