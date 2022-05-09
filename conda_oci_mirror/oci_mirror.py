@@ -105,7 +105,7 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
         # creation of info.tar.gz _does not yet work on windows_ properly...
         if platform.system() != "Windows":
             metadata = [
-                Layer(f"{package_name}/info.tar.sgz", info_archive_media_type),
+                Layer(f"{package_name}/info.tar.gz", info_archive_media_type),
                 Layer(f"{package_name}/info/index.json", info_index_media_type),
             ]
         else:
