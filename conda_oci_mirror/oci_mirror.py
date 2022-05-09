@@ -91,6 +91,7 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
     path_to_archive = pathlib.Path(path_to_archive)
     package_name = get_package_name(path_to_archive)
 
+    layers =[]
     with TemporaryDirectory() as upload_files_directory:
         shutil.copy(path_to_archive, upload_files_directory)
 
@@ -126,10 +127,11 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
         print (f"## Path dir is: {path_to_archive} ")
         prefix = str(path_to_archive).rsplit("/",1)[0]
         
-        oci.push_image(pathlib.Path(prefix),name,layers)
+        remote_location = f"{channel}/{subdir}"
+        oci.push_image(pathlib.Path(prefix),remote_location,name,layers + metadata)
 
         #oras.push(
-        #    f"{host}/{channel}/{subdir}/{ngame}", version_and_build, layers + metadata
+        #    f"{host}/{channel}/{subdir}/{name}", version_and_build, layers + metadata
         #)
 
         if extra_tags:
