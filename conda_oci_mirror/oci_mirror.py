@@ -10,7 +10,6 @@ import shutil
 import subprocess
 import tarfile
 import time
-from hmac import digest
 from tempfile import TemporaryDirectory
 
 import requests

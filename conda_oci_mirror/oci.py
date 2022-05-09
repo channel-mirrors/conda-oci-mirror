@@ -114,6 +114,7 @@ class OCI:
         manifest_dict = {"schemaVersion":2,"mediaType": "application/vnd.oci.image.manifest.v1+json","config":{}, "layers":[],"annotations":{}}    
         gh_session = self.oci_auth(package, scope="push,pull")
         pkg_name = package
+        print (f"!!!888888 location is : {self.location}")
         print(f"layer Size: {len(_layers)}")
 
         for layer in _layers:
