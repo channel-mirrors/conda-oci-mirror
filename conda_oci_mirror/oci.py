@@ -114,11 +114,15 @@ class OCI:
         manifest_dict = {"schemaVersion":2,"mediaType": "application/vnd.oci.image.manifest.v1+json","config":{}, "layers":[],"annotations":{}}    
         gh_session = self.oci_auth(package, scope="push,pull")
         pkg_name = package
-        r = gh_session.post(f"https://ghcr.io/v2/{self.user_or_org}/{pkg_name}/blobs/uploads/")
-        headers = r.headers
-        location = headers['location']
         print(f"layer Size: {len(_layers)}")
+        
         for layer in _layers:
+
+            r = gh_session.post(f"https://ghcr.io/v2/{self.user_or_org}/{pkg_name}/blobs/uploads/")
+            headers = r.headers
+            location = headers['location']
+        
+        
             layer_path = _base_path / layer.file
             
             #update the manifest
@@ -171,4 +175,4 @@ class OCI:
         with open(str(manifest_path), "rb") as f:
             r_manfst = gh_session.put(mnfst_url, data=f, headers=_mnfst_headers)
             print ("manifest upload response: ")
-            print (r_manfst)
+            print (r_manfst.content)
