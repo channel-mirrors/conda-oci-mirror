@@ -10,7 +10,7 @@ import requests
 from conda_oci_mirror import constants as C
 from conda_oci_mirror.util import get_github_auth
 from conda_oci_mirror.util import sha256sum
-from conda_oci_mirror.util import compute_hashlib
+
 
 class OCI:
     def __init__(self, location, user_or_org):
@@ -115,8 +115,7 @@ class OCI:
         manifest_dict = {"schemaVersion":2,"mediaType": "application/vnd.oci.image.manifest.v1+json","config":{}, "layers":[],"annotations":{}}    
         gh_session = self.oci_auth(package, scope="push,pull")
         pkg_name = package
-        print(f"layer Size: {len(_layers)}")
-
+        
         for layer in _layers:
 
             r = gh_session.post(f"https://ghcr.io/v2/{self.user_or_org}/{remote_location}/{pkg_name}/blobs/uploads/")
@@ -129,9 +128,12 @@ class OCI:
             _size = pathlib.Path(layer_path).stat().st_size
             digest = sha256sum(layer_path)
             _digest = "sha256:" + digest
-            _hash_value = compute_hashlib(str(layer_path))
-            annotations_dict = {"org.conda.md5": _hash_value}
-            infos = {"mediaType":_media_type,"size":_size,"digest":_digest, "annotations": annotations_dict}
+            if _media_type.endswith("package.v1"):
+                _hash_value = layer.annotations
+                annotations_dict = {"org.conda.md5": _hash_value}
+                infos = {"mediaType":_media_type,"size":_size,"digest":_digest, "annotations": annotations_dict}
+            else:
+                infos = {"mediaType":_media_type,"size":_size,"digest":_digest}
             manifest_dict["layers"].append(infos)
 
             # push the layer

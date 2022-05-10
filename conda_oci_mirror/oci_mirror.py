@@ -14,6 +14,7 @@ from tempfile import TemporaryDirectory
 
 import requests
 from conda_package_handling import api as cph_api
+from conda_oci_mirror.util import compute_hashlib
 
 from conda_oci_mirror.constants import (
     CACHE_DIR,
@@ -97,19 +98,24 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
 
         prepare_metadata(path_to_archive, upload_files_directory)
 
+        _annotations = compute_hashlib(path_to_archive.name)
+
         if path_to_archive.name.endswith("tar.bz2"):
-            layers = [Layer(path_to_archive.name, package_tarbz2_media_type)]
+            layers = [Layer(path_to_archive.name, package_tarbz2_media_type, _annotations)]
         else:
-            layers = [Layer(path_to_archive.name, package_conda_media_type)]
+            layers = [Layer(path_to_archive.name, package_conda_media_type, _annotations)]
 
         # creation of info.tar.gz _does not yet work on windows_ properly...
+        md5_json = compute_hashlib (f"{package_name}/info/index.json")
         if platform.system() != "Windows":
+            md5_gz = compute_hashlib (f"{package_name}/info.tar.gz")
+
             metadata = [
-                Layer(f"{package_name}/info.tar.gz", info_archive_media_type),
-                Layer(f"{package_name}/info/index.json", info_index_media_type),
+                Layer(f"{package_name}/info.tar.gz", info_archive_media_type, md5_gz),
+                Layer(f"{package_name}/info/index.json", info_index_media_type, md5_json),
             ]
         else:
-            metadata = [Layer(f"{package_name}/info/index.json", info_index_media_type)]
+            metadata = [Layer(f"{package_name}/info/index.json", info_index_media_type, md5_json)]
 
         oras = ORAS(base_dir=upload_files_directory)
 
@@ -135,7 +141,6 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
         if extra_tags:
             for t in extra_tags:
                 oras.push(f"{host}/{channel}/{subdir}/{name}", t, layers + metadata)
-    print (f"========>l = {len(layers)}")
     return j
 
 
