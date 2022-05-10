@@ -97,8 +97,8 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
         shutil.copy(path_to_archive, upload_files_directory)
 
         prepare_metadata(path_to_archive, upload_files_directory)
-
-        fn = upload_files_directory / path_to_archive.name
+        
+        fn = upload_files_directory + "/" + path_to_archive.name
         _annotations = compute_hashlib(str(fn))
 
         if path_to_archive.name.endswith("tar.bz2"):
