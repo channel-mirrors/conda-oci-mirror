@@ -120,6 +120,7 @@ class OCI:
 
             r = gh_session.post(f"https://ghcr.io/v2/{self.user_or_org}/{remote_location}/{pkg_name}/blobs/uploads/")
             headers = r.headers
+            print (headers)
             location = headers['location']
             layer_path = _base_path / layer.file
 
