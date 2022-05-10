@@ -98,7 +98,8 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
 
         prepare_metadata(path_to_archive, upload_files_directory)
 
-        _annotations = compute_hashlib(path_to_archive.name)
+        fn = upload_files_directory / path_to_archive.name
+        _annotations = compute_hashlib(str(fn))
 
         if path_to_archive.name.endswith("tar.bz2"):
             layers = [Layer(path_to_archive.name, package_tarbz2_media_type, _annotations)]
@@ -106,9 +107,9 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
             layers = [Layer(path_to_archive.name, package_conda_media_type, _annotations)]
 
         # creation of info.tar.gz _does not yet work on windows_ properly...
-        md5_json = compute_hashlib (f"{package_name}/info/index.json")
+        md5_json = compute_hashlib (f"{upload_files_directory}/{package_name}/info/index.json")
         if platform.system() != "Windows":
-            md5_gz = compute_hashlib (f"{package_name}/info.tar.gz")
+            md5_gz = compute_hashlib (f"{upload_files_directory}/{package_name}/info.tar.gz")
 
             metadata = [
                 Layer(f"{package_name}/info.tar.gz", info_archive_media_type, md5_gz),
