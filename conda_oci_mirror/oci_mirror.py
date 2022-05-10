@@ -97,7 +97,7 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
         shutil.copy(path_to_archive, upload_files_directory)
 
         prepare_metadata(path_to_archive, upload_files_directory)
-        
+
         fn = upload_files_directory + "/" + path_to_archive.name
         _annotations = compute_hashlib(str(fn))
 
@@ -156,7 +156,6 @@ def get_repodata(channel, subdir, cache_dir=CACHE_DIR):
     )
     with open(repodata, "w") as fo:
         fo.write(r.text)
-
     return repodata
 
 
@@ -235,7 +234,8 @@ def get_existing_packages(oci, channel, subdir, package):
 
 
 class Task:
-    def __init__(self, channel, subdir, package, package_info, cache_dir, remote_loc):
+    def __init__(self, oci, channel, subdir, package, package_info, cache_dir, remote_loc):
+        self.oci = oci
         self.channel = channel
         self.subdir = subdir
         self.package = package
@@ -278,7 +278,7 @@ class Task:
 
         return target_func()
 
-    def run(self, oci):
+    def run(self):
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -292,7 +292,7 @@ class Task:
             return self.retry()
 
         try:
-            upload_conda_package(self.file, self.remote_loc, self.channel, oci)
+            upload_conda_package(self.file, self.remote_loc, self.channel, self.oci)
         except Exception:
             return self.retry()
 
@@ -351,6 +351,7 @@ def mirror(
                     print("Adding task for ", key)
                     tasks.append(
                         Task(
+                            oci,
                             channel,
                             subdir,
                             key,
@@ -364,7 +365,7 @@ def mirror(
     if not dry_run:
         for task in tasks:
             start = time.time()
-            task.run(oci)
+            task.run()
             end = time.time()
             elapsed = end - start
 
