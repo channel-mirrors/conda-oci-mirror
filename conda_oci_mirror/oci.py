@@ -1,3 +1,4 @@
+from __future__ import annotations
 import tarfile
 import json
 import pathlib
@@ -120,7 +121,6 @@ class OCI:
 
             r = gh_session.post(f"https://ghcr.io/v2/{self.user_or_org}/{remote_location}/{pkg_name}/blobs/uploads/")
             headers = r.headers
-            print (headers)
             location = headers['location']
             layer_path = _base_path / layer.file
 
@@ -130,7 +130,8 @@ class OCI:
             digest = sha256sum(layer_path)
             _digest = "sha256:" + digest
             _hash_value = compute_hashlib(str(layer_path))
-            infos = {"mediaType":_media_type,"size":_size,"digest":_digest, "hashlib":_hash_value}
+            annotations_dict = {"org.conda.md5": _hash_value}
+            infos = {"mediaType":_media_type,"size":_size,"digest":_digest, "annotations": annotations_dict}
             manifest_dict["layers"].append(infos)
 
             # push the layer
@@ -169,7 +170,6 @@ class OCI:
         ref = _reference
         mnfst_url = f"https://ghcr.io/v2/{self.user_or_org}/{remote_location}/{pkg_name}/manifests/{ref}"
 
-        print("??????? uploading the manifest")
         with open(str(manifest_path), "rb") as f:
             r_manfst = gh_session.put(mnfst_url, data=f, headers=_mnfst_headers)
             print ("manifest upload response: ")
