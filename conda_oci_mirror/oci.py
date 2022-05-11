@@ -181,6 +181,6 @@ class OCI:
         print (json.dumps(manifest_dict, indent=4))
 
         print (f"+++++++++++get manifest from <{pkg_name}> ref:{_reference}")
-        mnft_dict = self.get_manifest(pkg_name, _reference)
+        mnft_dict = self.get_manifest(remote_location + "/" + pkg_name, _reference)
         print("!! get_manifest result: ")
         print (json.dumps(mnft_dict, indent=4))
