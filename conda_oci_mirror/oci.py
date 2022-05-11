@@ -170,15 +170,17 @@ class OCI:
         ref = _reference
         mnfst_url = f"https://ghcr.io/v2/{self.user_or_org}/{remote_location}/{pkg_name}/manifests/{ref}"
 
+        print (f"!!!!!!! manifest link is: {mnfst_url}")
         with open(str(manifest_path), "rb") as f:
             r_manfst = gh_session.put(mnfst_url, data=f, headers=_mnfst_headers)
             print ("manifest upload response: ")
             print (r_manfst)
             print (r_manfst.content)
 
-        mnft_dict = self.get_manifest(package, _reference)
         print("!! local manifest: ")
         print (json.dumps(manifest_dict, indent=4))
 
+        print (f"+++++++++++get manifest from <{pkg_name}> ref:{_reference}")
+        mnft_dict = self.get_manifest(pkg_name, _reference)
         print("!! get_manifest result: ")
         print (json.dumps(mnft_dict, indent=4))
