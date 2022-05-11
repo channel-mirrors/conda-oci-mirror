@@ -149,18 +149,27 @@ class OCI:
         manifest_dict["annotations"]["org.opencontainers.image.description"] = "start Description"
         manifest_path = _base_path / "manifest.json"
 
-        conf = {"mediaType": "application/vnd.oci.image.config.v1+json","size": 2, "digest": "sha256:b5b2b2c507a0944348e0303114d8d93aaaa081732b86451d9bce1f432a537bc7"}
+        conf_path = _base_path / "config.json"
+        config_dict = {}
+        
+        with open(conf_path, "w") as write_file:
+            json.dump(config_dict, write_file)
+        _conf_size = pathlib.Path(conf_path).stat().st_size
+        _conf_sha = sha256sum(conf_path)
+        _digest_conf = "sha256:" + _conf_sha
+
+        conf = {"mediaType": "application/vnd.oci.image.config.v1+json","size": {_conf_size}, "digest": _digest_conf}
         manifest_dict ["config"] = conf
 
         with open(manifest_path, "w") as write_file:
             json.dump(manifest_dict, write_file)
 
-        mnfst_digest = sha256sum(manifest_path)
-        _mnfst_digest = "sha256:" + mnfst_digest
-        manifest_dict ["config"]["digest"] = _mnfst_digest
+        #mnfst_digest = sha256sum(manifest_path)
+        #_mnfst_digest = "sha256:" + mnfst_digest
+        #manifest_dict ["config"]["digest"] = _mnfst_digest
 
-        with open(manifest_path, "w") as write_file:
-            json.dump(manifest_dict, write_file)
+        #with open(manifest_path, "w") as write_file:
+        #    json.dump(manifest_dict, write_file)
 
 
         _mnfst_headers = { "Content-Type": "application/vnd.oci.image.manifest.v1+json"}
