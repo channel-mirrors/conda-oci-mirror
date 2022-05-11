@@ -151,14 +151,12 @@ class OCI:
 
         conf_path = _base_path / "config.json"
         config_dict = {}
-        
         with open(conf_path, "w") as write_file:
             json.dump(config_dict, write_file)
         _conf_size = pathlib.Path(conf_path).stat().st_size
         _conf_sha = sha256sum(conf_path)
-        _digest_conf = "sha256:" + _conf_sha
-
-        conf = {"mediaType": "application/vnd.oci.image.config.v1+json","size": {_conf_size}, "digest": _digest_conf}
+        _conf_digest = "sha256:" + _conf_sha
+        conf = {"mediaType": "application/vnd.oci.image.config.v1+json","size": {_conf_size}, "digest": _conf_digest}
         manifest_dict ["config"] = conf
 
         with open(manifest_path, "w") as write_file:
