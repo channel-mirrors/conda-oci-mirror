@@ -165,8 +165,6 @@ class OCI:
         with open(manifest_path, "w") as write_file:
             json.dump(manifest_dict, write_file)
 
-        print("!! The manifest: ")
-        print (json.dumps(manifest_dict, indent=4))
 
         _mnfst_headers = { "Content-Type": "application/vnd.oci.image.manifest.v1+json"}
         ref = _reference
@@ -177,3 +175,10 @@ class OCI:
             print ("manifest upload response: ")
             print (r_manfst)
             print (r_manfst.content)
+
+        mnft_dict = self.get_manifest(package, _reference)
+        print("!! local manifest: ")
+        print (json.dumps(manifest_dict, indent=4))
+
+        print("!! get_manifest result: ")
+        print (json.dumps(mnft_dict, indent=4))
