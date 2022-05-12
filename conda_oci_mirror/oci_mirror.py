@@ -101,6 +101,7 @@ def upload_conda_package(path_to_archive, host, channel, annotations_key, oci, e
         fn = upload_files_directory + "/" + path_to_archive.name
         md5_value = compute_md5(str(fn))
         #_annotations_dict = {"org.conda.md5": md5_value}
+
         _annotations_dict = {annotations_key: md5_value}
 
         empty_annotations = {"empty":"empty"}
@@ -137,8 +138,8 @@ def upload_conda_package(path_to_archive, host, channel, annotations_key, oci, e
         print("Pushing: ", f"{host}/{channel}/{subdir}/{name}") 
         prefix = upload_files_directory
         remote_location = f"{channel}/{subdir}"
-        oci.push_image(pathlib.Path(prefix), remote_location, name, version_and_build, layers + metadata)
-
+        _desc = "First comment of the image"
+        oci.push_image(pathlib.Path(prefix), remote_location, name, version_and_build, _desc, layers + metadata)
         #oras.push(
         #    f"{host}/{channel}/{subdir}/{name}", version_and_build, layers + metadata
         #)
