@@ -1,10 +1,14 @@
 import tarfile
+import json
+import pathlib
+
 from io import BytesIO
 
 import requests
 
 from conda_oci_mirror import constants as C
 from conda_oci_mirror.util import get_github_auth
+from conda_oci_mirror.util import sha256sum
 
 
 class OCI:
@@ -104,3 +108,59 @@ class OCI:
     def get_index_json(self, package, tag):
         digest = self._find_digest(package, tag, C.info_index_media_type)
         return self.get_blob(package, digest).json()
+
+    def push_image(self, _base_path,remote_location, package, _reference, description_annotation, _layers):
+
+        manifest_dict = {"schemaVersion":2,"mediaType": "application/vnd.oci.image.manifest.v1+json","config":{}, "layers":[],"annotations":{}}    
+        gh_session = self.oci_auth(package, scope="push,pull")
+        pkg_name = package
+        
+        for layer in _layers:
+
+            r = gh_session.post(f"https://ghcr.io/v2/{self.user_or_org}/{remote_location}/{pkg_name}/blobs/uploads/")
+            headers = r.headers
+            location = headers['location']
+            layer_path = _base_path / layer.file
+
+            #update the manifest
+            _media_type = layer.media_type
+            _size = pathlib.Path(layer_path).stat().st_size
+            digest = sha256sum(layer_path)
+            _digest = "sha256:" + digest
+            
+            annotations_dict = layer.annotations
+            if annotations_dict:
+                infos = {"mediaType":_media_type,"size":_size,"digest":_digest, "annotations": annotations_dict}
+            else:
+                infos = {"mediaType":_media_type,"size":_size,"digest":_digest}
+            manifest_dict["layers"].append(infos)
+
+            # push the layer
+            push_url = f"https://ghcr.io{location}?digest={_digest}"
+            _headers = { "Content-Length": str(_size),"Content-Type": "application/octet-stream"}
+            with open(str(layer_path), "rb") as f:
+                r2 = gh_session.put(push_url, data=f, headers=_headers)
+                
+        manifest_dict["annotations"] = description_annotation
+        manifest_path = _base_path / "manifest.json"
+
+        conf_path = _base_path / "config.json"
+        config_dict = {}
+        with open(conf_path, "w") as write_file:
+            json.dump(config_dict, write_file)
+        _conf_size = pathlib.Path(conf_path).stat().st_size
+        _conf_sha = sha256sum(conf_path)
+        _conf_digest = "sha256:" + _conf_sha
+        conf = {"mediaType": "application/vnd.oci.image.config.v1+json","size": _conf_size, "digest": _conf_digest}
+        manifest_dict ["config"] = conf
+
+        with open(manifest_path, "w") as write_file:
+            json.dump(manifest_dict, write_file)
+
+        _mnfst_headers = { "Content-Type": "application/vnd.oci.image.manifest.v1+json"}
+        ref = _reference
+        mnfst_url = f"https://ghcr.io/v2/{self.user_or_org}/{remote_location}/{pkg_name}/manifests/{ref}"
+
+        with open(str(manifest_path), "rb") as f:
+            r_manfst = gh_session.put(mnfst_url, data=f, headers=_mnfst_headers)
+            

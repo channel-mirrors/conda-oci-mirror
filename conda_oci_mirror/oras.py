@@ -32,6 +32,7 @@ class ORAS:
 
 
 class Layer:
-    def __init__(self, file, media_type):
+    def __init__(self, file, media_type, annotations):
         self.file = file
         self.media_type = media_type
+        self.annotations = annotations
