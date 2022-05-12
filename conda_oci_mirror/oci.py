@@ -1,4 +1,3 @@
-from __future__ import annotations
 import tarfile
 import json
 import pathlib
