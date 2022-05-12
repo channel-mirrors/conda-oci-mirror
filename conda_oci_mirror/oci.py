@@ -110,7 +110,7 @@ class OCI:
         digest = self._find_digest(package, tag, C.info_index_media_type)
         return self.get_blob(package, digest).json()
 
-    def push_image(self, _base_path,remote_location, package, _reference, description, _layers):
+    def push_image(self, _base_path,remote_location, package, _reference, description_annotation, _layers):
 
         manifest_dict = {"schemaVersion":2,"mediaType": "application/vnd.oci.image.manifest.v1+json","config":{}, "layers":[],"annotations":{}}    
         gh_session = self.oci_auth(package, scope="push,pull")
@@ -130,8 +130,7 @@ class OCI:
             _digest = "sha256:" + digest
             
             annotations_dict = layer.annotations
-            if "empty" not in annotations_dict.keys():
-                #annotations_dict = {"org.conda.md5": _hash_value}
+            if annotations_dict:
                 infos = {"mediaType":_media_type,"size":_size,"digest":_digest, "annotations": annotations_dict}
             else:
                 infos = {"mediaType":_media_type,"size":_size,"digest":_digest}
@@ -146,7 +145,7 @@ class OCI:
                 print(r2)
                 print(r2.content)
 
-        manifest_dict["annotations"]["org.opencontainers.image.description"] = description
+        manifest_dict["annotations"] = description_annotation
         manifest_path = _base_path / "manifest.json"
 
         conf_path = _base_path / "config.json"
@@ -161,7 +160,6 @@ class OCI:
 
         with open(manifest_path, "w") as write_file:
             json.dump(manifest_dict, write_file)
-
 
         _mnfst_headers = { "Content-Type": "application/vnd.oci.image.manifest.v1+json"}
         ref = _reference

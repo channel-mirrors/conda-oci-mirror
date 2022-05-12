@@ -35,7 +35,7 @@ def sha256sum(path):
     return hash_func.hexdigest()
 
 
-def compute_md5(fn):
+def md5sum(fn):
     curr_sha = hashlib.md5()
     with open(fn, "rb") as f:
         for byte_block in iter(lambda: f.read(4096), b""):
