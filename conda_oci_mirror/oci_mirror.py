@@ -108,15 +108,12 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
 
         # creation of info.tar.gz _does not yet work on windows_ properly...
         if platform.system() != "Windows":
-            md5_gz = md5sum (f"{upload_files_directory}/{package_name}/info.tar.gz")
-
             metadata = [
                 Layer(f"{package_name}/info.tar.gz", info_archive_media_type, {}),
                 Layer(f"{package_name}/info/index.json", info_index_media_type, {}),
             ]
         else:
             metadata = [Layer(f"{package_name}/info/index.json", info_index_media_type, {})]
-
         oras = ORAS(base_dir=upload_files_directory)
 
         name = package_name.rsplit("-", 2)[0]
@@ -136,9 +133,6 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
         _desc_annotations = {"org.opencontainers.image.description": _description }
 
         oci.push_image(pathlib.Path(prefix), remote_location, name, version_and_build, _desc_annotations, layers + metadata)
-        #oras.push(
-        #    f"{host}/{channel}/{subdir}/{name}", version_and_build, layers + metadata
-        #)
 
         if extra_tags:
             for t in extra_tags:
