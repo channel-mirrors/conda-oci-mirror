@@ -1,3 +1,4 @@
+from __future__ import annotations
 import fnmatch
 import hashlib
 import json
@@ -14,7 +15,7 @@ from tempfile import TemporaryDirectory
 
 import requests
 from conda_package_handling import api as cph_api
-from conda_oci_mirror.util import compute_hashlib
+from conda_oci_mirror.util import compute_md5
 
 from conda_oci_mirror.constants import (
     CACHE_DIR,
@@ -87,8 +88,7 @@ def reverse_tag_format(tag):
     return tag.replace("__p__", "+").replace("__e__", "!")
 
 
-
-def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
+def upload_conda_package(path_to_archive, host, channel, annotations_key, oci, extra_tags=None):
     path_to_archive = pathlib.Path(path_to_archive)
     package_name = get_package_name(path_to_archive)
 
@@ -99,24 +99,28 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
         prepare_metadata(path_to_archive, upload_files_directory)
 
         fn = upload_files_directory + "/" + path_to_archive.name
-        _annotations = compute_hashlib(str(fn))
+        md5_value = compute_md5(str(fn))
+        #_annotations_dict = {"org.conda.md5": md5_value}
+        _annotations_dict = {annotations_key: md5_value}
+
+        empty_annotations = {"empty":"empty"}
 
         if path_to_archive.name.endswith("tar.bz2"):
-            layers = [Layer(path_to_archive.name, package_tarbz2_media_type, _annotations)]
+            layers = [Layer(path_to_archive.name, package_tarbz2_media_type, _annotations_dict)]
         else:
-            layers = [Layer(path_to_archive.name, package_conda_media_type, _annotations)]
+            layers = [Layer(path_to_archive.name, package_conda_media_type, empty_annotations)]
 
         # creation of info.tar.gz _does not yet work on windows_ properly...
-        md5_json = compute_hashlib (f"{upload_files_directory}/{package_name}/info/index.json")
+        #md5_json = compute_md5 (f"{upload_files_directory}/{package_name}/info/index.json")
         if platform.system() != "Windows":
-            md5_gz = compute_hashlib (f"{upload_files_directory}/{package_name}/info.tar.gz")
+            md5_gz = compute_md5 (f"{upload_files_directory}/{package_name}/info.tar.gz")
 
             metadata = [
-                Layer(f"{package_name}/info.tar.gz", info_archive_media_type, md5_gz),
-                Layer(f"{package_name}/info/index.json", info_index_media_type, md5_json),
+                Layer(f"{package_name}/info.tar.gz", info_archive_media_type, empty_annotations),
+                Layer(f"{package_name}/info/index.json", info_index_media_type, empty_annotations),
             ]
         else:
-            metadata = [Layer(f"{package_name}/info/index.json", info_index_media_type, md5_json)]
+            metadata = [Layer(f"{package_name}/info/index.json", info_index_media_type, empty_annotations)]
 
         oras = ORAS(base_dir=upload_files_directory)
 
@@ -234,12 +238,13 @@ def get_existing_packages(oci, channel, subdir, package):
 
 
 class Task:
-    def __init__(self, oci, channel, subdir, package, package_info, cache_dir, remote_loc):
+    def __init__(self, oci, channel, annotations_key, subdir, package, package_info, cache_dir, remote_loc):
         self.oci = oci
         self.channel = channel
+        self.annotations_key = annotations_key
         self.subdir = subdir
         self.package = package
-        self.packagel_info = package_info
+        self.package_info = package_info
         self.cache_dir = cache_dir
         self.remote_loc = remote_loc
         self.retries = 0
@@ -286,13 +291,13 @@ class Task:
             self.file = self.download_file()
 
         print(f"File downloaded: {self.file}")
-        if check_checksum(self.file, self.packagel_info) is False:
+        if check_checksum(self.file, self.package_info) is False:
             self.file.unlink()
             self.file = None
             return self.retry()
 
         try:
-            upload_conda_package(self.file, self.remote_loc, self.channel, self.oci)
+            upload_conda_package(self.file, self.remote_loc, self.channel, self.annotations_key,  self.oci)
         except Exception:
             return self.retry()
 
@@ -308,6 +313,7 @@ def run_task(t):
 def mirror(
     channels, subdirs, packages, target_org_or_user, host, cache_dir=None, dry_run=False
 ):
+
     if cache_dir is None:
         cache_dir = CACHE_DIR
 
@@ -321,6 +327,8 @@ def mirror(
     oci = OCI("https://ghcr.io", raw_user_or_org)
 
     remote_loc = f"{host}/{raw_user_or_org}"
+
+    annotations_key = "org.conda.md5"
 
     tasks = []
     for channel in channels:
@@ -353,6 +361,7 @@ def mirror(
                         Task(
                             oci,
                             channel,
+                            annotations_key,
                             subdir,
                             key,
                             package_info,

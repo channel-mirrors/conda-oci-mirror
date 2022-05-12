@@ -35,13 +35,10 @@ def sha256sum(path):
     return hash_func.hexdigest()
 
 
-def compute_hashlib(fn):
-    BUF_SIZE = 65536
-    curr_sha = hashlib.sha1()
-    with open(fn, 'rb') as f:
-        while True:
-            _dt = f.read(BUF_SIZE)
-            if not _dt:
-                break
-            curr_sha.update(_dt)
+def compute_md5(fn):
+    curr_sha = hashlib.md5()
+    with open(fn, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            curr_sha.update(byte_block)
+
     return curr_sha.hexdigest()
