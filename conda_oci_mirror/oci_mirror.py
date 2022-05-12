@@ -132,7 +132,7 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
         print("Pushing: ", f"{host}/{channel}/{subdir}/{name}") 
         prefix = upload_files_directory
         remote_location = f"{channel}/{subdir}"
-        _description = "First comment of the image"
+        _description = "Itinial comment of the image"
         _desc_annotations = {"org.opencontainers.image.description": _description }
 
         oci.push_image(pathlib.Path(prefix), remote_location, name, version_and_build, _desc_annotations, layers + metadata)
