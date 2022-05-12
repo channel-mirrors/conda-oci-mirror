@@ -140,10 +140,7 @@ class OCI:
             _headers = { "Content-Length": str(_size),"Content-Type": "application/octet-stream"}
             with open(str(layer_path), "rb") as f:
                 r2 = gh_session.put(push_url, data=f, headers=_headers)
-                print ("response for the currrent layer")
-                print(r2)
-                print(r2.content)
-
+                
         manifest_dict["annotations"] = description_annotation
         manifest_path = _base_path / "manifest.json"
 
@@ -166,6 +163,4 @@ class OCI:
 
         with open(str(manifest_path), "rb") as f:
             r_manfst = gh_session.put(mnfst_url, data=f, headers=_mnfst_headers)
-            print ("manifest upload response: ")
-            print (r_manfst)
-            print (r_manfst.content)
+            
