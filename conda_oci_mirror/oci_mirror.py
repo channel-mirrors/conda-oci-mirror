@@ -259,13 +259,14 @@ class Task:
 
         except requests.exceptions.HTTPError as e:
             if e.response.status_code >= 500:
-                return self.retry(timeout=30, target_func=self.download_file)
+                # todo check retry-after header
+                return self.retry(timeout=60, target_func=self.download_file)
             else:
                 raise e
 
         return fn
 
-    def retry(self, timeout=2, target_func=None):
+    def retry(self, timeout=5, target_func=None):
         if not target_func:
             target_func = self.run
 
@@ -377,7 +378,7 @@ def mirror(
         #         time.sleep(3 - elapsed)
 
         # This was going too fast
-        with mp.Pool(processes=2) as pool:
+        with mp.Pool(processes=8) as pool:
             pool.map(run_task, tasks)
 
 
