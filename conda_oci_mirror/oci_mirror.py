@@ -378,7 +378,7 @@ def mirror(
         #         time.sleep(3 - elapsed)
 
         # This was going too fast
-        with mp.Pool(processes=8) as pool:
+        with mp.Pool(processes=4) as pool:
             pool.map(run_task, tasks)
 
 
