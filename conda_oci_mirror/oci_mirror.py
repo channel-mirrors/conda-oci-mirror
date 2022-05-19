@@ -372,9 +372,9 @@ def mirror(
 
             # This should at least take 20 seconds
             # Otherwise we sleep a bit
-            if elapsed < 20:
-                print("Sleeping for ", 20 - elapsed)
-                time.sleep(20 - elapsed)
+            if elapsed < 3:
+                print("Sleeping for ", 3 - elapsed)
+                time.sleep(3 - elapsed)
 
         # This was going too fast
         # with mp.Pool(processes=8) as pool:
