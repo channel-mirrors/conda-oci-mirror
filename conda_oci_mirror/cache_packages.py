@@ -6,8 +6,9 @@ from datetime import datetime
 from pathlib import Path
 
 from conda_oci_mirror.constants import package_tarbz2_media_type
+from conda_oci_mirror.layer import Layer
 from conda_oci_mirror.oci_mirror import upload_conda_package
-from conda_oci_mirror.oras import ORAS, Layer
+from conda_oci_mirror.oras import ORAS
 
 
 def load_json(path):
