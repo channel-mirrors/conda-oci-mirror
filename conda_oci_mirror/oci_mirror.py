@@ -14,7 +14,6 @@ from tempfile import TemporaryDirectory
 
 import requests
 from conda_package_handling import api as cph_api
-from conda_oci_mirror.util import md5sum
 
 from conda_oci_mirror.constants import (
     CACHE_DIR,
@@ -23,9 +22,10 @@ from conda_oci_mirror.constants import (
     package_conda_media_type,
     package_tarbz2_media_type,
 )
+from conda_oci_mirror.layer import Layer
 from conda_oci_mirror.oci import OCI
-from conda_oci_mirror.oras import ORAS, Layer
-from conda_oci_mirror.util import get_github_auth
+from conda_oci_mirror.oras import ORAS
+from conda_oci_mirror.util import get_github_auth, md5sum
 
 
 def compress_folder(source_dir, output_filename):
@@ -91,52 +91,55 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
     path_to_archive = pathlib.Path(path_to_archive)
     package_name = get_package_name(path_to_archive)
 
-    layers =[]
+    layers = []
     with TemporaryDirectory() as upload_files_directory:
         shutil.copy(path_to_archive, upload_files_directory)
 
         prepare_metadata(path_to_archive, upload_files_directory)
 
-        fn = upload_files_directory + "/" + path_to_archive.name
-        md5_value = md5sum(str(fn))        
+        fn = upload_files_directory / path_to_archive.name
+        md5_value = md5sum(fn)
+
         _annotations_dict = {"org.conda.md5": md5_value}
 
         if path_to_archive.name.endswith("tar.bz2"):
-            layers = [Layer(path_to_archive.name, package_tarbz2_media_type, _annotations_dict)]
+            layers = [
+                Layer(
+                    path_to_archive.name, package_tarbz2_media_type, _annotations_dict
+                )
+            ]
         else:
-            layers = [Layer(path_to_archive.name, package_conda_media_type, {})]
+            layers = [Layer(path_to_archive.name, package_conda_media_type)]
 
         # creation of info.tar.gz _does not yet work on windows_ properly...
         if platform.system() != "Windows":
             metadata = [
-                Layer(f"{package_name}/info.tar.gz", info_archive_media_type, {}),
-                Layer(f"{package_name}/info/index.json", info_index_media_type, {}),
+                Layer(f"{package_name}/info.tar.gz", info_archive_media_type),
+                Layer(f"{package_name}/info/index.json", info_index_media_type),
             ]
         else:
-            metadata = [Layer(f"{package_name}/info/index.json", info_index_media_type, {})]
+            metadata = [Layer(f"{package_name}/info/index.json", info_index_media_type)]
         oras = ORAS(base_dir=upload_files_directory)
 
         name = package_name.rsplit("-", 2)[0]
         version_and_build = tag_format("-".join(package_name.rsplit("-", 2)[1:]))
 
         with open(
-            pathlib.Path(upload_files_directory) / package_name / "info" / "index.json",
+            upload_files_directory / package_name / "info" / "index.json",
             "r",
         ) as fi:
             j = json.load(fi)
             subdir = j["subdir"]
 
-        print("Pushing: ", f"{host}/{channel}/{subdir}/{name}") 
-        prefix = upload_files_directory
-        remote_location = f"{channel}/{subdir}"
-        _description = "Itinial comment of the image"
-        _desc_annotations = {"org.opencontainers.image.description": _description }
-
-        oci.push_image(pathlib.Path(prefix), remote_location, name, version_and_build, _desc_annotations, layers + metadata)
+        print("Pushing: ", f"{host}/{channel}/{subdir}/{name}")
+        oras.push(
+            f"{host}/{channel}/{subdir}/{name}", version_and_build, layers + metadata
+        )
 
         if extra_tags:
             for t in extra_tags:
                 oras.push(f"{host}/{channel}/{subdir}/{name}", t, layers + metadata)
+
     return j
 
 
@@ -229,7 +232,9 @@ def get_existing_packages(oci, channel, subdir, package):
 
 
 class Task:
-    def __init__(self, oci, channel, subdir, package, package_info, cache_dir, remote_loc):
+    def __init__(
+        self, oci, channel, subdir, package, package_info, cache_dir, remote_loc
+    ):
         self.oci = oci
         self.channel = channel
         self.subdir = subdir
@@ -287,7 +292,7 @@ class Task:
             return self.retry()
 
         try:
-            upload_conda_package(self.file, self.remote_loc, self.channel,  self.oci)
+            upload_conda_package(self.file, self.remote_loc, self.channel, self.oci)
         except Exception:
             return self.retry()
 
@@ -318,7 +323,6 @@ def mirror(
 
     remote_loc = f"{host}/{raw_user_or_org}"
 
-    
     tasks = []
     for channel in channels:
         for subdir in subdirs:

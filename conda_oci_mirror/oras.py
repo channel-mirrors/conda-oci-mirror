@@ -29,10 +29,3 @@ class ORAS:
         dest = f"{target}:{tag}"
         args = ["push", dest] + layer_opts
         return self.run(args)
-
-
-class Layer:
-    def __init__(self, file, media_type, annotations):
-        self.file = file
-        self.media_type = media_type
-        self.annotations = annotations
