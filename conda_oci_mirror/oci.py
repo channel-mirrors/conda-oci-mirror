@@ -1,6 +1,7 @@
 import json
 import tarfile
 from io import BytesIO
+from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import requests
@@ -110,8 +111,6 @@ class OCI:
 
     def push_image(
         self,
-        base_path,
-        remote_location,
         package,
         reference,
         layers,
@@ -130,10 +129,9 @@ class OCI:
 
         for layer in layers:
             r = gh_session.post(
-                f"https://ghcr.io/v2/{self.user_or_org}/{remote_location}/{package}/blobs/uploads/"
+                f"https://ghcr.io/v2/{self.user_or_org}/{package}/blobs/uploads/"
             )
             location = r.headers["location"]
-            layer_path = base_path / layer.file
 
             # update the manifest
             layer_info = layer.to_dict()
@@ -142,19 +140,20 @@ class OCI:
             # push the layer
             push_url = f"https://ghcr.io{location}?digest={layer_info['digest']}"
             headers = {
-                "Content-Length": layer_info["size"],
+                "Content-Length": str(layer_info["size"]),
                 "Content-Type": "application/octet-stream",
             }
 
-            with open(layer_path, "rb") as f:
+            with open(layer.file, "rb") as f:
                 gh_session.put(push_url, data=f, headers=headers)
 
         if annotations:
             manifest_dict["annotations"] = annotations
 
         with TemporaryDirectory() as temp_dir:
-            manifest_path = temp_dir / "manifest.json"
-            config_path = temp_dir / "config.json"
+            temp_path = Path(temp_dir)
+            manifest_path = temp_path / "manifest.json"
+            config_path = temp_path / "config.json"
 
             config_dict = {}
             with open(config_path, "w") as write_file:
@@ -170,7 +169,9 @@ class OCI:
             manifest_headers = {
                 "Content-Type": "application/vnd.oci.image.manifest.v1+json"
             }
-            manifest_url = f"https://ghcr.io/v2/{self.user_or_org}/{remote_location}/{package}/manifests/{reference}"
+            manifest_url = (
+                f"https://ghcr.io/v2/{self.user_or_org}/{package}/manifests/{reference}"
+            )
 
             with open(manifest_path, "rb") as f:
                 gh_session.put(manifest_url, data=f, headers=manifest_headers)
