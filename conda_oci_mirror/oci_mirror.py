@@ -93,11 +93,12 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
 
     layers = []
     with TemporaryDirectory() as upload_files_directory:
+        upload_files_path = pathlib.Path(upload_files_directory)
         shutil.copy(path_to_archive, upload_files_directory)
 
-        prepare_metadata(path_to_archive, upload_files_directory)
+        prepare_metadata(path_to_archive, upload_files_path)
 
-        fn = upload_files_directory / path_to_archive.name
+        fn = upload_files_path / path_to_archive.name
         md5_value = md5sum(fn)
 
         _annotations_dict = {"org.conda.md5": md5_value}
@@ -119,13 +120,13 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
             ]
         else:
             metadata = [Layer(f"{package_name}/info/index.json", info_index_media_type)]
-        oras = ORAS(base_dir=upload_files_directory)
+        oras = ORAS(base_dir=upload_files_path)
 
         name = package_name.rsplit("-", 2)[0]
         version_and_build = tag_format("-".join(package_name.rsplit("-", 2)[1:]))
 
         with open(
-            upload_files_directory / package_name / "info" / "index.json",
+            upload_files_path / package_name / "info" / "index.json",
             "r",
         ) as fi:
             j = json.load(fi)
