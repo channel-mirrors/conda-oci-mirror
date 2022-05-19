@@ -155,7 +155,7 @@ class OCI:
             manifest_path = temp_path / "manifest.json"
             config_path = temp_path / "config.json"
 
-            config_dict = {}
+            config_dict = config or {}
             with open(config_path, "w") as write_file:
                 json.dump(config_dict, write_file)
 
