@@ -113,7 +113,7 @@ def push_new_layers(oci, remote_location, name, version_and_build, _desc_annotat
 
   new_layers = [Layer(dot_js_file, dot_js_file_media_type, {}), Layer(dot_data_file, dot_data_file_media_type, {})]
   
-  oci.push_image(files_dir, remote_location, name, version_and_build, _desc_annotations, layers)
+  oci.push_image(files_dir, remote_location, name, version_and_build, _desc_annotations, new_layers)
   
   
 
@@ -167,7 +167,7 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
         
         
         manfst = oci.get_manifest(name, version_and_build)
-        parsed = json.loads(manfst)
+        parsed = json.load(manfst)
         print("####################first upload")
         print(json.dumps(parsed, indent=4, sort_keys=True))
 
@@ -175,7 +175,7 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
         push_new_layers(oci, remote_location, name, version_and_build, _desc_annotations)
 
         manfst = oci.get_manifest(name, version_and_build)
-        parsed = json.loads(manfst)
+        parsed = json.load(manfst)
         print("!!!!!!!!!!!!!!!!!!!!!!!!! second upload")
         print(json.dumps(parsed, indent=4, sort_keys=True))
 
