@@ -1,6 +1,7 @@
 import fnmatch
 import hashlib
 import json
+from multiprocessing.spawn import prepare
 
 # import multiprocessing as mp
 import os
@@ -22,6 +23,9 @@ from conda_oci_mirror.constants import (
     info_index_media_type,
     package_conda_media_type,
     package_tarbz2_media_type,
+    dot_js_file_media_type,
+    dot_data_file_media_type
+
 )
 from conda_oci_mirror.oci import OCI
 from conda_oci_mirror.oras import ORAS, Layer
@@ -87,6 +91,32 @@ def reverse_tag_format(tag):
     return tag.replace("__p__", "+").replace("__e__", "!")
 
 
+def prepare_func( pkg):
+  files_dir = pathlib.Path("/home/runner/packed")    
+  files_dir.mkdir(mode=511, parents=True, exist_ok=False)
+  dot_data = pkg + ".data"
+  dot_js = pkg + ".js"
+  dot_data_fn = files_dir / dot_data
+  dot_js_fn = files_dir / dot_js
+  dot_data_fn.open(mode='w', buffering=-1, encoding=None, errors=None, newline=None)
+  dot_js_fn.open(mode='w', buffering=-1, encoding=None, errors=None, newline=None)
+  
+  
+  
+  
+def push_new_layers(oci, remote_location, name, version_and_build, _desc_annotations):
+  
+  package_name = name + "-" +  version_and_build
+  files_dir = pathlib.Path("/home/runner/packed")    
+  dot_js_file = package_name + ".js"
+  dot_data_file = package_name + ".data"
+
+  new_layers = [Layer(dot_js_file, dot_js_file_media_type, {}), Layer(dot_data_file, dot_data_file_media_type, {})]
+  
+  oci.push_image(files_dir, remote_location, name, version_and_build, _desc_annotations, layers)
+  
+  
+
 def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
     path_to_archive = pathlib.Path(path_to_archive)
     package_name = get_package_name(path_to_archive)
@@ -134,10 +164,26 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
 
         oci.push_image(pathlib.Path(prefix), remote_location, name, version_and_build, _desc_annotations, layers + metadata)
 
+        
+        
+        manfst = oci.get_manifest(name, version_and_build)
+        parsed = json.loads(manfst)
+        print("####################first upload")
+        print(json.dumps(parsed, indent=4, sort_keys=True))
+
+        prepare_func(name + "-" + version_and_build)
+        push_new_layers(oci, remote_location, name, version_and_build, _desc_annotations)
+
+        manfst = oci.get_manifest(name, version_and_build)
+        parsed = json.loads(manfst)
+        print("!!!!!!!!!!!!!!!!!!!!!!!!! second upload")
+        print(json.dumps(parsed, indent=4, sort_keys=True))
+
+
         if extra_tags:
             for t in extra_tags:
                 oras.push(f"{host}/{channel}/{subdir}/{name}", t, layers + metadata)
-    return j
+
 
 
 def get_repodata(channel, subdir, cache_dir=CACHE_DIR):
@@ -328,10 +374,10 @@ def mirror(
             repodata_fn = get_repodata(channel, subdir, cache_dir)
 
             with open(repodata_fn) as fi:
-                j = json.load(fi)
+                j =json.load(fi)
 
             for key, package_info in j["packages"].items():
-                if packages:
+                if pac kages:
                     if not any(
                         fnmatch.fnmatch(package_info["name"], x) for x in packages
                     ):
