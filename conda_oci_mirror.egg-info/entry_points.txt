@@ -1,0 +1,2 @@
+[console_scripts]
+conda-oci = conda_oci_mirror.cli:main

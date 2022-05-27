@@ -1,0 +1,24 @@
+Metadata-Version: 2.1
+Name: conda-oci-mirror
+Version: 0.1.0
+Summary: Tools to mirror conda packages to an OCI registry.
+Home-page: https://github.com/MichaelKora/conda_oci_mirror/tree/push_pypi
+Author: QuantStack
+Author-email: info@quantstack.net
+License: BSD 3-Clause License
+Keywords: mamba,conda,oci
+Platform: Linux
+Platform: Mac OS X
+Platform: Windows
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: System Administrators
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Requires-Python: >=3.7
+Description-Content-Type: text/markdown
+License-File: LICENSE.rst

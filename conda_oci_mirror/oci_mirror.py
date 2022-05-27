@@ -165,15 +165,15 @@ def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
         oci.push_image(pathlib.Path(prefix), remote_location, name, version_and_build, _desc_annotations, layers + metadata)
 
         
-        
-        manfst = oci.get_manifest(name, version_and_build)
+        m_pkg = f"{channel}/{subdir}/{name}"
+        manfst = oci.get_manifest(m_pkg, version_and_build)
         print("####################first upload")
         print(json.dumps(manfst, indent=4, sort_keys=True))
 
         prepare_func(name + "-" + version_and_build)
         push_new_layers(oci, remote_location, name, version_and_build, _desc_annotations)
 
-        manfst = oci.get_manifest(name, version_and_build)
+        manfst = oci.get_manifest(m_pkg, version_and_build)
         print("!!!!!!!!!!!!!!!!!!!!!!!!! second upload")
         print(json.dumps(manfst, indent=4, sort_keys=True))
 

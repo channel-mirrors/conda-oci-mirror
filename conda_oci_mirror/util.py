@@ -1,6 +1,6 @@
 import hashlib
 import os
-
+from conda_oci_mirror.oras import Layer
 
 def get_envvars(envvars):
     for e in envvars:
