@@ -114,16 +114,20 @@ class OCI:
         package,
         reference,
         layers,
+        old_manifest=None,
         config=None,
         annotations=None,
     ):
 
-        manifest_dict = {
-            "schemaVersion": 2,
-            "mediaType": "application/vnd.oci.image.manifest.v1+json",
-            "config": {},
-            "layers": [],
-        }
+        if not old_manifest:
+            manifest_dict = {
+                "schemaVersion": 2,
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "config": {},
+                "layers": [],
+            }
+        else:
+            manifest_dict = old_manifest
 
         gh_session = self.oci_auth(package, scope="push,pull")
 
