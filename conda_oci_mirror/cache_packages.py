@@ -58,6 +58,9 @@ def push_new_packages(location, packages, subdirs, cache_dir, dry_run=False):
 
     date_time_tag = now.strftime("%Y.%m.%d.%H%M%S")
 
+    host, channel = location.rsplit("/", 1)
+    oci = OCI(host, channel)
+
     for subdir in subdirs:
 
         sdir_cache = cache_dir / subdir
@@ -80,10 +83,8 @@ def push_new_packages(location, packages, subdirs, cache_dir, dry_run=False):
                 new_packages.append(f)
 
         for p in new_packages:
-            host, channel = location.rsplit("/", 1)
             print("Uploading ", p, host, channel)
-
-            upload_conda_package(p, host, channel, extra_tags=["latest"])
+            upload_conda_package(p, host, channel, oci, extra_tags=["latest"])
 
         layers = [Layer("repodata.json", "application/json")]
         oras = ORAS(base_dir=sdir_cache)
