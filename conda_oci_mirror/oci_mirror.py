@@ -86,7 +86,7 @@ def reverse_tag_format(tag):
     return tag.replace("__p__", "+").replace("__e__", "!")
 
 
-def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
+def upload_conda_package(path_to_archive, host, channel, extra_tags=None):
     path_to_archive = pathlib.Path(path_to_archive)
     package_name = get_package_name(path_to_archive)
 
