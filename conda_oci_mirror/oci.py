@@ -14,6 +14,8 @@ from conda_oci_mirror.util import get_github_auth
 class OCI:
     def __init__(self, location, user_or_org):
         self.location = location
+        if not self.location.startswith("http"):
+            self.location = "https://" + self.location
         self.user_or_org = user_or_org
         self.session_map = {}
 
@@ -114,20 +116,16 @@ class OCI:
         package,
         reference,
         layers,
-        old_manifest=None,
         config=None,
         annotations=None,
     ):
 
-        if not old_manifest:
-            manifest_dict = {
-                "schemaVersion": 2,
-                "mediaType": "application/vnd.oci.image.manifest.v1+json",
-                "config": {},
-                "layers": [],
-            }
-        else:
-            manifest_dict = old_manifest
+        manifest_dict = {
+            "schemaVersion": 2,
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "config": {},
+            "layers": [],
+        }
 
         gh_session = self.oci_auth(package, scope="push,pull")
 

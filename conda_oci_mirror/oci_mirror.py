@@ -1,3 +1,4 @@
+import datetime
 import fnmatch
 import hashlib
 import json
@@ -20,6 +21,7 @@ from conda_oci_mirror.constants import (
     info_index_media_type,
     package_conda_media_type,
     package_tarbz2_media_type,
+    repodata_v1,
 )
 from conda_oci_mirror.layer import Layer
 from conda_oci_mirror.oci import OCI
@@ -79,14 +81,14 @@ def get_forbidden_packages():
 
 
 def tag_format(tag):
-    return tag.replace("+", "__p__").replace("!", "__e__")
+    return tag.replace("+", "__p__").replace("!", "__e__").replace("=", "__eq__")
 
 
 def reverse_tag_format(tag):
-    return tag.replace("__p__", "+").replace("__e__", "!")
+    return tag.replace("__p__", "+").replace("__e__", "!").replace("__eq__", "=")
 
 
-def upload_conda_package(path_to_archive, host, channel, extra_tags=None):
+def upload_conda_package(path_to_archive, host, channel, oci, extra_tags=None):
     path_to_archive = pathlib.Path(path_to_archive)
     package_name = get_package_name(path_to_archive)
 
@@ -129,9 +131,15 @@ def upload_conda_package(path_to_archive, host, channel, extra_tags=None):
             "r",
         ) as fi:
             j = json.load(fi)
-            subdir = j["subdir"]
+            subdir = j.get("subdir")
+            if not subdir:
+                print("ERROR: info.json doesn't contain subdir!")
+                return
 
-        print("Pushing: ", f"{host}/{channel}/{subdir}/{name}")
+        if name.startswith("_"):
+            name = f"zzz{name}"
+
+        print(f"Pushing: {host}/{channel}/{subdir}/{name}:{version_and_build}")
         oras.push(
             f"{host}/{channel}/{subdir}/{name}", version_and_build, layers + metadata
         )
@@ -163,7 +171,6 @@ def get_github_packages(location, user_or_org, filter_function=None):
     user_or_org, username_or_orgname = user_or_org.split(":")
     gh_session.auth = get_github_auth(username_or_orgname)
 
-    print("Auth: ", gh_session.auth)
     # api_url = f'https://api.github.com/orgs/{org}/packages'
     headers = {"accept": "application/vnd.github.v3+json"}
     if user_or_org == "user":
@@ -213,6 +220,9 @@ existing_tags_cache = {}
 def get_existing_tags(oci, channel, subdir, package):
     global existing_tags_cache
 
+    if package.startswith("_"):
+        package = f"zzz{package}"
+
     if package in existing_tags_cache:
         return existing_tags_cache[package]
 
@@ -229,6 +239,11 @@ def get_existing_packages(oci, channel, subdir, package):
     tags = get_existing_tags(oci, channel, subdir, package)
 
     return set(f"{package}-{tag}.tar.bz2" for tag in tags)
+
+
+package_counter = mp.Value("i", 0)
+counter_start = mp.Value("d", time.time())
+last_upload_time = mp.Value("d", time.time())
 
 
 class Task:
@@ -259,23 +274,30 @@ class Task:
         except requests.exceptions.HTTPError as e:
             if e.response.status_code >= 500:
                 # todo check retry-after header
-                return self.retry(timeout=60, target_func=self.download_file)
+                return self.retry(
+                    timeout=60,
+                    target_func=self.download_file,
+                    error="downloading file failed with >=500",
+                )
             else:
                 raise e
 
         return fn
 
-    def retry(self, timeout=5, target_func=None):
+    def retry(self, timeout=2, target_func=None, error="unspecified error"):
         if not target_func:
             target_func = self.run
 
-        print(f"Retrying in {timeout} seconds")
-        time.sleep(timeout)
         self.retries += 1
-        if self.retries > 3:
-            raise RuntimeError(
-                "Could not retrieve the correct file. Hashes not matching for 3 times"
-            )
+
+        t = timeout + 3**self.retries
+
+        print(f"Retrying in {t} seconds - error: {error}")
+
+        time.sleep(t)
+
+        if self.retries > 5:
+            raise RuntimeError(error)
 
         return target_func()
 
@@ -286,18 +308,39 @@ class Task:
         if not self.file or not self.file.exists():
             self.file = self.download_file()
 
-        print(f"File downloaded: {self.file}")
         if check_checksum(self.file, self.package_info) is False:
             self.file.unlink()
             self.file = None
-            return self.retry()
+            return self.retry(error="checksums wrong")
+
+        global package_counter, counter_start, last_upload_time
+
+        with last_upload_time.get_lock():
+            lt = last_upload_time.value
+            tnow = time.time()
+            rt = 0.5
+            if tnow - lt < rt:
+                print(f"Rate limit sleep for {(lt + rt) - tnow}")
+                time.sleep((lt + rt) - tnow)
+            last_upload_time.value = tnow
 
         try:
             upload_conda_package(self.file, self.remote_loc, self.channel, self.oci)
         except Exception:
-            return self.retry()
+            return self.retry(error="upload did not work")
 
-        print(f"File uploaded to {self.remote_loc}")
+        with package_counter.get_lock(), counter_start.get_lock():
+            package_counter.value += 1
+            if package_counter.value % 10 == 0:
+                elapsed_min = (time.time() - counter_start.value) / 60.0
+                print(
+                    "Average no packages / min: ", package_counter.value / elapsed_min
+                )
+
+            if package_counter.value % 50 == 0:
+                package_counter.value = 0
+                counter_start.value = time.time()
+
         # delete the package
         self.file.unlink()
 
@@ -318,9 +361,8 @@ def mirror(
     else:
         forbidden_packages = []
 
-    print("Cache dir is: ", cache_dir)
     raw_user_or_org = target_org_or_user.split(":")[1]
-    oci = OCI("https://ghcr.io", raw_user_or_org)
+    oci = OCI(host, raw_user_or_org)
 
     remote_loc = f"{host}/{raw_user_or_org}"
 
@@ -330,6 +372,7 @@ def mirror(
 
             full_cache_dir = cache_dir / channel / subdir
 
+            repodata_timestamp = datetime.datetime.now()
             repodata_fn = get_repodata(channel, subdir, cache_dir)
 
             with open(repodata_fn) as fi:
@@ -350,7 +393,6 @@ def mirror(
                 )
 
                 if key not in existing_packages:
-                    print("Adding task for ", key)
                     tasks.append(
                         Task(
                             oci,
@@ -362,13 +404,36 @@ def mirror(
                             remote_loc,
                         )
                     )
+            repodata_layers = [Layer(repodata_fn.name, repodata_v1)]
+            repodata_date_tag = repodata_timestamp.strftime("%Y.%m.%d.%H.%M")
+
+            oras = ORAS(base_dir=full_cache_dir)
+            print(
+                f"Pushing repodata.json for {host}/{raw_user_or_org}/{channel}/{subdir}: {repodata_date_tag}"
+            )
+
+            oras.push(
+                f"{host}/{raw_user_or_org}/{channel}/{subdir}/repodata.json",
+                repodata_date_tag,
+                repodata_layers,
+            )
+            print("Pushing latest tag.")
+            oras.push(
+                f"{host}/{raw_user_or_org}/{channel}/{subdir}/repodata.json",
+                "latest",
+                repodata_layers,
+            )
 
     if not dry_run:
+        global counter_start
+        with counter_start.get_lock():
+            counter_start.value = time.time()
+        num_proc = 4
         # for task in tasks:
-        #     start = time.time()
+        #     # start = time.time()
         #     task.run()
-        #     end = time.time()
-        #     elapsed = end - start
+        #     # end = time.time()
+        #     # elapsed = end - start
 
         #     # This should at least take 20 seconds
         #     # Otherwise we sleep a bit
@@ -377,7 +442,8 @@ def mirror(
         #         time.sleep(3 - elapsed)
 
         # This was going too fast
-        with mp.Pool(processes=4) as pool:
+        # with RateLimitedThreadPool(processes=num_proc, rate=30, per=60) as pool:
+        with mp.Pool(processes=num_proc) as pool:
             pool.map(run_task, tasks)
 
 
