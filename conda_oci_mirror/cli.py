@@ -2,18 +2,9 @@ import pathlib
 
 import click
 
+import conda_oci_mirror.defaults as defaults
 from conda_oci_mirror.cache_packages import pull_latest_packages, push_new_packages
-from conda_oci_mirror.oci_mirror import mirror as _mirror
-
-DEFAULT_SUBDIRS = [
-    "linux-64",
-    "osx-64",
-    "osx-arm64",
-    "win-64",
-    "linux-aarch64",
-    "linux-ppc64le",
-    "noarch",
-]
+from conda_oci_mirror.mirror import Mirror
 
 
 @click.group()
@@ -23,9 +14,9 @@ def main():
 
 @main.command()
 @click.option("-c", "--channel", help="Select channel")
-@click.option("-s", "--subdirs", default=DEFAULT_SUBDIRS, multiple=True)
+@click.option("-s", "--subdirs", default=defaults.DEFAULT_SUBDIRS, multiple=True)
 @click.option(
-    "-p", "--packages", help="Select packages for mirroring", default=[], multiple=True
+    "-p", "--package", help="Select packages for mirroring", default=[], multiple=True
 )
 @click.option("--user", default=None, help="Username for ghcr.io")
 @click.option("--host", default="ghcr.io", help="Host to push packages to")
@@ -33,22 +24,18 @@ def main():
 @click.option(
     "--cache-dir", default=pathlib.Path.cwd() / "cache", help="Path to cache directory"
 )
-def mirror(channel, subdirs, user, packages, host, cache_dir, dry_run):
-    cache_dir = pathlib.Path(cache_dir)
-    print(f"Using cache dir: {cache_dir}")
-    print(f"Mirroring : {channel}")
-    print(f"  Subdirs : {subdirs}")
-    print(f"  Packages: {packages}")
-    print(f"To: {host}/{user}")
-    _mirror(
-        [channel],
-        subdirs,
-        packages,
-        f"user:{user}",
-        host,
+@click.option("--quiet", default=False, help="Don't print verbose output?")
+def mirror(channel, subdirs, user, package, host, cache_dir, dry_run, quiet):
+    m = Mirror(
+        channels=[channel],
+        subdirs=subdirs,
+        packages=package,
+        host=host,
+        namespace=user,
         cache_dir=cache_dir,
-        dry_run=dry_run,
+        quiet=quiet,
     )
+    m.update(dry_run)
 
 
 def push_pull_options(function):
@@ -78,7 +65,6 @@ def push_pull_options(function):
 @main.command()
 @push_pull_options
 def pull_cache(location, subdir, packages, host, cache_dir, dry_run):
-    print(subdir)
     pull_latest_packages(f"{host}/{location}", packages, [subdir], cache_dir)
 
 

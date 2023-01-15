@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 
 import requests
 
-from conda_oci_mirror import constants as C
+import conda_oci_mirror.defaults as defaults
 from conda_oci_mirror.layer import Layer
 from conda_oci_mirror.util import get_github_auth
 
@@ -103,12 +103,12 @@ class OCI:
         return digest
 
     def get_info(self, package, tag):
-        digest = self._find_digest(package, tag, C.info_archive_media_type)
+        digest = self._find_digest(package, tag, defaults.info_archive_media_type)
         res = self.get_blob(package, digest, stream=False)
         return tarfile.open(fileobj=BytesIO(res.content), mode="r:gz")
 
     def get_index_json(self, package, tag):
-        digest = self._find_digest(package, tag, C.info_index_media_type)
+        digest = self._find_digest(package, tag, defaults.info_index_media_type)
         return self.get_blob(package, digest).json()
 
     def push_image(
