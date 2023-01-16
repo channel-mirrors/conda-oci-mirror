@@ -1,9 +1,13 @@
+import datetime
 import logging
 import os
+import pathlib
+import subprocess
 
 import requests
 
 import conda_oci_mirror.defaults as defaults
+import conda_oci_mirror.package as pkg
 import conda_oci_mirror.repo as repository
 import conda_oci_mirror.tasks as tasks
 import conda_oci_mirror.util as util
@@ -22,6 +26,13 @@ def get_forbidden_packages():
             f"Cannot retrieve forbidden packages from {defaults.forbidden_package_url}"
         )
     return response.json()["undistributable"]
+
+
+def conda_index(cache_dir):
+    """
+    conda index to create updated repodata.json
+    """
+    subprocess.check_output(["conda", "index", str(cache_dir)])
 
 
 class Mirror:
@@ -71,16 +82,16 @@ class Mirror:
         Show metadata about the mirror setup
         """
         util.print_item("Using cache dir:", self.cache_dir)
-        util.print_item("Mirroring :", self.channels)
+        util.print_item("Channels  :", self.channels)
         util.print_item("  Subdirs :", self.subdirs)
         util.print_item("  Packages:", self.packages)
-        if self.registry:
-            util.print_item("To: ", self.registry)
 
     def update(self, dry_run=False):
         """
-        Update from a conda mirror.
+        Update from a conda mirror - akin to a pull and a push.
         """
+        util.print_item("To: ", self.registry)
+
         # Create a task runner (defaults to 4 processes)
         runner = tasks.TaskRunner()
 
@@ -89,7 +100,7 @@ class Mirror:
             logger.warning("ORAS is not authenticated, this will be a dry run.")
             dry_run = True
 
-        for channel, subdir, cache_dir in self.iter_packages():
+        for channel, subdir, cache_dir in self.iter_channels():
             repo = repository.PackageRepo(channel, subdir, cache_dir)
 
             # Run filter based on packages we are looking for, and forbidden
@@ -104,10 +115,10 @@ class Mirror:
                         channel,
                         subdir,
                         package,
-                        info,
                         cache_dir,
                         self.registry,
                         dry_run=dry_run,
+                        info=info,
                     )
                 )
 
@@ -124,7 +135,7 @@ class Mirror:
         # Once we get here, run all tasks
         runner.run()
 
-    def iter_packages(self):
+    def iter_channels(self):
         """
         yield groups of channels, subdir, and cache directories.
         """
@@ -132,3 +143,90 @@ class Mirror:
             for subdir in self.subdirs:
                 cache_dir = os.path.join(self.cache_dir, channel, subdir)
                 yield channel, subdir, cache_dir
+
+    def pull_latest(self, dry_run=False):
+        """
+        Pull latest packages from a location (the GitHub user) to a local cache.
+        """
+        util.print_item("From: ", self.registry)
+        util.print_item("  To: ", self.cache_dir)
+
+        for channel, subdir, cache_dir in self.iter_channels():
+
+            # Note that the original channel is relevant for a mirror
+            uri = f"{self.registry}/{channel}/{subdir}/repodata.json:latest"
+
+            try:
+                # Retrieve a path to the index_file
+                index_file = oras.pull_by_media_type(
+                    uri, cache_dir, defaults.repodata_media_type_v1
+                )[0]
+                repodata = util.read_json(index_file)
+                packages = set([p["name"] for _, p in repodata["packages"].items()])
+                logger.info(f"Found len(packages) packages from {uri}")
+                renamed = os.path.join(
+                    os.path.dirname(index_file), "original_repodata.json"
+                )
+                os.rename(index_file, renamed)
+
+            except Exception as e:
+                print(f"Issue retriving uri: {uri}: {e}")
+
+            for package in packages:
+
+                # Skip those that aren't desired if a filter is given
+                if self.packages and package not in self.packages:
+                    continue
+
+                uri = f"{self.registry}/{channel}/{subdir}/{package}:latest"
+
+                # Dry run don't actually do it
+                if dry_run:
+                    print(f"Would be pulling {package}, but dry-run is set.")
+                    continue
+
+                # Not every package is guaranteed to exist
+                try:
+                    oras.pull_by_media_type(
+                        uri, cache_dir, defaults.package_tarbz2_media_type
+                    )
+                except Exception as e:
+                    print(f"Cannot pull package {package}: {e}")
+
+    def push_new(self, dry_run=False):
+        """
+        Push new packages to the remote.
+        """
+        util.print_item("From: ", self.cache_dir)
+        util.print_item("  To: ", self.registry)
+
+        for channel, subdir, cache_dir in self.iter_channels():
+
+            # The channel cache is one level up from our subdir cache
+            channel_root = os.path.dirname(cache_dir)
+            conda_index(channel_root)
+            orig_repodata = os.path.join(cache_dir, "original_repodata.json")
+
+            # Create new repodata or load existing
+            if os.path.exists(orig_repodata):
+                repodata = util.read_json(orig_repodata)
+            else:
+                repodata = {"packages": []}
+            files = list(pathlib.Path(cache_dir).rglob("*.tar.bz2"))
+            new_packages = [f for f in files if f.name not in repodata["packages"]]
+            print(f"Found {len(new_packages)} new packages")
+
+            # Push with an updated timestamp
+            timestamp = datetime.datetime.now().strftime("%Y.%m.%d.%H%M%S")
+
+            # Upload new packages
+            for package_name in new_packages:
+                package = pkg.Package(
+                    channel,
+                    subdir,
+                    package_name,
+                    cache_dir,
+                    namespace=self.registry,
+                    existing_file=str(package_name),
+                )
+                package.upload(dry_run, timestamp)

@@ -70,7 +70,19 @@ def download_file(url, dest, checksum_content=None, chunk_size=8192):
 
 
 class Package:
-    def __init__(self, channel, subdir, package, info, cache_dir, namespace):
+    def __init__(
+        self,
+        channel,
+        subdir,
+        package,
+        cache_dir,
+        namespace,
+        info=None,
+        existing_file=None,
+    ):
+        """
+        Info is only required if the file does not exist yet.
+        """
         self.channel = channel
         self.subdir = subdir
         self.package = package
@@ -78,7 +90,7 @@ class Package:
         self.cache_dir = cache_dir
         self.namespace = namespace
         self._package_name = None
-        self.file = None
+        self.file = existing_file
 
     def ensure_file(self):
         """
@@ -156,14 +168,13 @@ class Package:
             shutil.copy(index_json, os.path.join(dest_dir, "info", "index.json"))
 
     @classretry
-    def upload(self, dry_run=False):
+    def upload(self, dry_run=False, extra_tags=None, timestamp=None):
         """
         Upload a conda package archive.
-
-        This function used to have an extra_tags variable, but it was not used.
         """
+        extra_tags = extra_tags or ["latest"]
         with tempfile.TemporaryDirectory() as staging_dir:
-            pusher = Pusher(staging_dir)
+            pusher = Pusher(staging_dir, timestamp=timestamp)
             upload_files_path = pathlib.Path(staging_dir)
             shutil.copy(self.file, staging_dir)
 
@@ -219,9 +230,12 @@ class Package:
                 )
                 return
 
-            # Is this a private or similar package?
+            # Is this a private or similar package? (not sure what this is doing)
             if name.startswith("_"):
                 name = f"zzz{name}"
-            uri = f"{self.namespace}/{self.channel}/{self.subdir}/{name}:{version_and_build}"
-            pusher.push(uri)
+
+            # Push main tag and extras
+            uri = f"{self.namespace}/{self.channel}/{self.subdir}/{name}"
+            for tag in [version_and_build] + extra_tags:
+                pusher.push(f"{uri}:{tag}")
             return index

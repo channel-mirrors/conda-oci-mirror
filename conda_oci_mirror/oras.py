@@ -8,6 +8,8 @@ import oras.oci
 import oras.provider
 from oras.decorator import ensure_container
 
+import conda_oci_mirror.util as util
+
 logger = logging.getLogger(__name__)
 
 
@@ -77,19 +79,59 @@ class Pusher:
         logger.info(f"⭐️ Pushing {uri}: {self.created_at}")
 
         # The context should be the file root
-        with oras.utils.workdir(self.root):
+        with oraslib.utils.workdir(self.root):
             oras.push(uri, self.layers)
 
 
-def pull_to_dir(pull_dir, target):
-    """
-    Given a URI, pull to an output directory.
-    """
-    reg = get_oras_client()
-    return reg.pull(target=target, outdir=pull_dir)
+# Cache of manifests
+manifest_cache = {}
 
 
 class Registry(oras.provider.Registry):
+    @ensure_container
+    def pull_by_media_type(self, container, dest, media_type=None):
+        """
+        Given a manifest of layers, retrieve a layer based on desired media type
+        """
+        # Keep a cache of manifests
+        global manifest_cache
+        if container.uri not in manifest_cache:
+            manifest_cache[container.uri] = self.get_manifest(container)
+        manifest = manifest_cache[container.uri]
+
+        # Let's return a list of download paths to the user
+        paths = []
+
+        # Find the layer of interest! Currently we look for presence of the string
+        # e.g., "prices" can come from "prices" or "prices-web"
+        for layer in manifest.get("layers", []):
+
+            # E.g., google.prices or google.prices-web or aws.prices
+            if media_type and layer["mediaType"] != media_type:
+                continue
+
+            # This annotation is currently the practice for a relative path to extract to
+            artifact = layer["annotations"]["org.opencontainers.image.title"]
+
+            # This raises an error if there is a malicious path
+            outfile = oraslib.utils.sanitize_path(dest, os.path.join(dest, artifact))
+
+            # If it already exists with the same digest, don't do it :)
+            expected_digest = f"sha256:{util.sha256sum(outfile)}"
+            if os.path.exists(outfile) and layer["digest"] == expected_digest:
+                print(
+                    f"{outfile} already exists with expected hash, not re-downloading."
+                )
+                paths.append(outfile)
+                continue
+
+            # this function  handles creating the output directory if does not exist
+            print(f"Downloading {artifact} to {outfile}")
+            path = self.download_blob(container, layer["digest"], outfile)
+            paths.append(path)
+
+        return paths
+
     @ensure_container
     def push(self, container, archives: list):
         """
