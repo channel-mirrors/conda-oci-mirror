@@ -173,6 +173,11 @@ class Package:
         Upload a conda package archive.
         """
         extra_tags = extra_tags or ["latest"]
+
+        # If we are not given an iterable
+        if not isinstance(extra_tags, (list, set, tuple)):
+            extra_tags = set([extra_tags])
+
         with tempfile.TemporaryDirectory() as staging_dir:
             pusher = Pusher(staging_dir, timestamp=timestamp)
             upload_files_path = pathlib.Path(staging_dir)
@@ -236,6 +241,6 @@ class Package:
 
             # Push main tag and extras
             uri = f"{self.namespace}/{self.channel}/{self.subdir}/{name}"
-            for tag in [version_and_build] + extra_tags:
+            for tag in [version_and_build] + list(extra_tags):
                 pusher.push(f"{uri}:{tag}")
             return index

@@ -18,7 +18,7 @@ options = [
     click.option("-s", "--subdir", default=defaults.DEFAULT_SUBDIRS, multiple=True),
     click.option("-p", "--package", help="Select packages", default=[], multiple=True),
     click.option("--user", default=None, help="Username for ghcr.io"),
-    click.option("--host", default="ghcr.io", help="Host to push packages to"),
+    click.option("--host", default="ghcr.io", help="Host for your registry"),
     click.option("--dry-run/--no-dry-run", default=False, help="Dry run?"),
     click.option("--cache-dir", default=default_cache, help="Path to cache directory"),
     click.option("-c", "--channel", help="Select channel", default="conda-forge"),

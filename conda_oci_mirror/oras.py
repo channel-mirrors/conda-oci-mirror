@@ -76,7 +76,7 @@ class Pusher:
         uri is the registry name with tag.
         """
         # Add some custom annotations!
-        logger.info(f"⭐️ Pushing {uri}: {self.created_at}")
+        print(f"⭐️ Pushing {uri}: {self.created_at}")
 
         # The context should be the file root
         with oraslib.utils.workdir(self.root):
@@ -117,13 +117,14 @@ class Registry(oras.provider.Registry):
             outfile = oraslib.utils.sanitize_path(dest, os.path.join(dest, artifact))
 
             # If it already exists with the same digest, don't do it :)
-            expected_digest = f"sha256:{util.sha256sum(outfile)}"
-            if os.path.exists(outfile) and layer["digest"] == expected_digest:
-                print(
-                    f"{outfile} already exists with expected hash, not re-downloading."
-                )
-                paths.append(outfile)
-                continue
+            if os.path.exists(outfile):
+                expected_digest = f"sha256:{util.sha256sum(outfile)}"
+                if layer["digest"] == expected_digest:
+                    print(
+                        f"{outfile} already exists with expected hash, not re-downloading."
+                    )
+                    paths.append(outfile)
+                    continue
 
             # this function  handles creating the output directory if does not exist
             print(f"Downloading {artifact} to {outfile}")

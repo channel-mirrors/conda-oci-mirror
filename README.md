@@ -106,20 +106,20 @@ account to push to:
 $ conda-oci mirror --channel conda-forge --package zlib --user researchapps
 ```
 
-## TODO
+You can also develop with a local registry (instead of ghcr.io):
 
-- [conda-package-handling](https://github.com/conda/conda-package-handling) is not installable via setup.cfg
-- ask wolf why deid (and others I maintain) not in conda-forge noarch listing?
-- add better formatting for logger (colors?)
-- add `--debug` mode to see what is happening at all steps
-- Question: I added size and creationTime annoations to layers - is that OK?
-- it would be nice to have a version regular expression for those we want to mirror (there are often a lot). It's not obvious the best way to do this - since the user can specify multiple packages either we would have a package be like `--package zlib@1.2.11` or we would need to scope the action to be just for one package.
+```bash
+$ docker run -it --rm -p 5000:5000 ghcr.io/oras-project/registry:latest
+```
 
-Note that we aren't specifying any kind of credential or even subdirectory - we are just asking
-to do a dry run for deid on conda-forge.
+And then specify the host and namespace for that registry - oras
+will fall back to insecure mode given that you've provided http://.
 
-Notice that `--dry-run` is set, and this is appropriate because we haven't logged into
-(or specified) a registry to push the mirror to.
+```bash
+$ conda-oci mirror --channel conda-forge --package testinfra --user dinosaur --host http://127.0.0.0:5000 --subdir noarch
+```
+
+See [TODO.md](TODO.md) for some questions and items to do.
 
 ### Linting
 

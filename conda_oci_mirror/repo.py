@@ -30,7 +30,7 @@ class PackageRepo:
 
     @property
     def repodata(self):
-        return os.path.join(self.cache_dir, self.name, "repodata.json")
+        return os.path.join(self.cache_dir, "repodata.json")
 
     @property
     def name(self):
@@ -54,12 +54,7 @@ class PackageRepo:
         """
         Get respository metadata
         """
-        # Cut out early if we already have it
-        if self.exists():
-            self.ensure_timestamp()
-            return self.repodata
-
-        # If we get here, we need to download it freshly
+        # TODO we should have a check here for timestamp, and re-retrieve if older than X
         util.mkdir_p(os.path.dirname(self.repodata))
         r = requests.get(
             f"https://conda.anaconda.org/{self.channel}/{self.subdir}/repodata.json",

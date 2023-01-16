@@ -2,6 +2,7 @@ import datetime
 import logging
 import os
 import pathlib
+import shutil
 import subprocess
 
 import requests
@@ -63,6 +64,10 @@ class Mirror:
         self.quiet = quiet
         self.announce()
 
+        # Ensure the oras registry is set to insecure or not based on host
+        global oras
+        oras.prefix = "http" if host.startswith("http://") else "https"
+
         # Set listing of (undistributable) packages to skip
         self.skip_packages = (
             get_forbidden_packages() if "conda-forge" in channels else None
@@ -97,8 +102,9 @@ class Mirror:
 
         # If they think they are pushing but no auth, they are not :)
         if not oras.has_auth and dry_run is False:
-            logger.warning("ORAS is not authenticated, this will be a dry run.")
-            dry_run = True
+            logger.warning(
+                "ORAS is not authenticated, if you registry requires auth this will not work"
+            )
 
         for channel, subdir, cache_dir in self.iter_channels():
             repo = repository.PackageRepo(channel, subdir, cache_dir)
@@ -164,12 +170,9 @@ class Mirror:
                 repodata = util.read_json(index_file)
                 packages = set([p["name"] for _, p in repodata["packages"].items()])
                 logger.info(f"Found len(packages) packages from {uri}")
-                renamed = os.path.join(
-                    os.path.dirname(index_file), "original_repodata.json"
-                )
-                os.rename(index_file, renamed)
 
             except Exception as e:
+                packages = set()
                 print(f"Issue retriving uri: {uri}: {e}")
 
             for package in packages:
@@ -204,12 +207,21 @@ class Mirror:
 
             # The channel cache is one level up from our subdir cache
             channel_root = os.path.dirname(cache_dir)
-            conda_index(channel_root)
-            orig_repodata = os.path.join(cache_dir, "original_repodata.json")
 
-            # Create new repodata or load existing
+            # Backup the original repository data so we can index and replace it
+            backup_repodata = os.path.join(cache_dir, "original_repodata.json")
+            orig_repodata = os.path.join(cache_dir, "repodata.json")
+
+            # If we already have repository data, make a copy
             if os.path.exists(orig_repodata):
-                repodata = util.read_json(orig_repodata)
+                shutil.copyfile(orig_repodata, backup_repodata)
+
+            # This nukes the repodata.json
+            conda_index(channel_root)
+
+            # Create new repodata or load existing from backup (before nuke)
+            if os.path.exists(backup_repodata):
+                repodata = util.read_json(backup_repodata)
             else:
                 repodata = {"packages": []}
             files = list(pathlib.Path(cache_dir).rglob("*.tar.bz2"))
@@ -230,3 +242,8 @@ class Mirror:
                     existing_file=str(package_name),
                 )
                 package.upload(dry_run, timestamp)
+
+            # If we cleanup, remove repodata.json and replace back with original
+            os.remove(orig_repodata)
+            if os.path.exists(backup_repodata):
+                shutil.move(backup_repodata, orig_repodata)
