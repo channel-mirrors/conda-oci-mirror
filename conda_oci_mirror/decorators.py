@@ -1,8 +1,7 @@
-import logging
 import time
 from functools import partial, update_wrapper
 
-logger = logging.getLogger(__name__)
+from conda_oci_mirror.logger import logger
 
 
 def retry(attempts, timeout=2):

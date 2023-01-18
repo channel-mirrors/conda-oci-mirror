@@ -1,5 +1,4 @@
 import datetime
-import logging
 import os
 import pathlib
 import shutil
@@ -12,9 +11,8 @@ import conda_oci_mirror.package as pkg
 import conda_oci_mirror.repo as repository
 import conda_oci_mirror.tasks as tasks
 import conda_oci_mirror.util as util
+from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import oras
-
-logger = logging.getLogger(__name__)
 
 
 def get_forbidden_packages():
@@ -173,7 +171,7 @@ class Mirror:
 
             except Exception as e:
                 packages = set()
-                print(f"Issue retriving uri: {uri}: {e}")
+                logger.warning(f"Issue retriving uri: {uri}: {e}")
 
             for package in packages:
 
@@ -185,7 +183,7 @@ class Mirror:
 
                 # Dry run don't actually do it
                 if dry_run:
-                    print(f"Would be pulling {package}, but dry-run is set.")
+                    logger.info(f"Would be pulling {package}, but dry-run is set.")
                     continue
 
                 # Not every package is guaranteed to exist
@@ -194,7 +192,7 @@ class Mirror:
                         uri, cache_dir, defaults.package_tarbz2_media_type
                     )
                 except Exception as e:
-                    print(f"Cannot pull package {package}: {e}")
+                    logger.warning(f"Cannot pull package {package}: {e}")
 
     def push_new(self, dry_run=False):
         """
@@ -226,7 +224,7 @@ class Mirror:
                 repodata = {"packages": []}
             files = list(pathlib.Path(cache_dir).rglob("*.tar.bz2"))
             new_packages = [f for f in files if f.name not in repodata["packages"]]
-            print(f"Found {len(new_packages)} new packages")
+            logger.info(f"Found {len(new_packages)} new packages")
 
             # Push with an updated timestamp
             timestamp = datetime.datetime.now().strftime("%Y.%m.%d.%H%M%S")

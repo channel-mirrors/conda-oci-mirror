@@ -3,6 +3,7 @@ import os
 import click
 
 import conda_oci_mirror.defaults as defaults
+from conda_oci_mirror.logger import setup_logger
 from conda_oci_mirror.mirror import Mirror
 
 # The cache defaults to the present working directory
@@ -22,6 +23,8 @@ options = [
     click.option("--dry-run/--no-dry-run", default=False, help="Dry run?"),
     click.option("--cache-dir", default=default_cache, help="Path to cache directory"),
     click.option("-c", "--channel", help="Select channel", default="conda-forge"),
+    click.option("--quiet", default=False, help="Do not print verbose output?"),
+    click.option("--debug", default=False, help="Print debug output?"),
 ]
 
 
@@ -40,7 +43,11 @@ def add_options(options):
 
 @main.command()
 @add_options(options)
-def mirror(channel, subdir, user, package, host, cache_dir, dry_run):
+def mirror(channel, subdir, user, package, host, cache_dir, dry_run, quiet, debug):
+    setup_logger(
+        quiet=quiet,
+        debug=debug,
+    )
     m = Mirror(
         channels=[channel],
         subdirs=subdir,
@@ -54,10 +61,14 @@ def mirror(channel, subdir, user, package, host, cache_dir, dry_run):
 
 @main.command()
 @add_options(options)
-def pull_cache(channel, user, subdir, package, host, cache_dir, dry_run):
+def pull_cache(channel, user, subdir, package, host, cache_dir, dry_run, quiet, debug):
     """
     Pull a remote host/user to a local cache_dir
     """
+    setup_logger(
+        quiet=quiet,
+        debug=debug,
+    )
     m = Mirror(
         channels=[channel],
         subdirs=subdir,
@@ -71,10 +82,14 @@ def pull_cache(channel, user, subdir, package, host, cache_dir, dry_run):
 
 @main.command()
 @add_options(options)
-def push_cache(channel, user, subdir, package, host, cache_dir, dry_run):
+def push_cache(channel, user, subdir, package, host, cache_dir, dry_run, quiet, debug):
     """
     Push a local cache in cache_dir to a remote host/user
     """
+    setup_logger(
+        quiet=quiet,
+        debug=debug,
+    )
     m = Mirror(
         channels=[channel],
         subdirs=subdir,

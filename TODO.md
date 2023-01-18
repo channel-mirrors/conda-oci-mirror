@@ -16,15 +16,8 @@
 
 ### General
 
-- [conda-package-handling](https://github.com/conda/conda-package-handling) is not installable via setup.cfg
-- add better formatting for logger (colors?)
-- add `--debug` mode to see what is happening at all steps
 - It would be nice to have a version regular expression for those we want to mirror (there are often a lot). It's not obvious the best way to do this - since the user can specify multiple packages either we would have a package be like `--package zlib@1.2.11` or we would need to scope the action to be just for one package.
 
 ### Questions
 
-- why is deid (and others I maintain) not in conda-forge noarch listing?
-- I added size and creationTime annoations to layers - is that OK?
-- why was repodata.json copied to original_repodata.json? Why do we need to save it (it doesn't seem to get used later)
 - Can we have the push/pull-cache also be done in parallel?
-- What does it mean for a package to start with an underscore (and in the code to change to `name = f"zzz{name}"`)?

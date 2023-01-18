@@ -2,16 +2,14 @@
 
 import datetime
 import fnmatch
-import logging
 import os
 
 import requests
 
 import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.util as util
+from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import Pusher, oras
-
-logger = logging.getLogger(__name__)
 
 # This is shared between PackageRepo instances
 existing_tags_cache = {}
@@ -122,6 +120,7 @@ class PackageRepo:
         """
         global existing_tags_cache
 
+        # These are empty packages that serve as helpers
         if package.startswith("_"):
             package = f"zzz{package}"
 

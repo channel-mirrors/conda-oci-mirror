@@ -1,5 +1,4 @@
 import datetime
-import logging
 import os
 
 import oras as oraslib
@@ -9,8 +8,7 @@ import oras.provider
 from oras.decorator import ensure_container
 
 import conda_oci_mirror.util as util
-
-logger = logging.getLogger(__name__)
+from conda_oci_mirror.logger import logger
 
 
 def get_oras_client():
@@ -76,7 +74,7 @@ class Pusher:
         uri is the registry name with tag.
         """
         # Add some custom annotations!
-        print(f"⭐️ Pushing {uri}: {self.created_at}")
+        logger.debug(f"⭐️ Pushing {uri}: {self.created_at}")
 
         # The context should be the file root
         with oraslib.utils.workdir(self.root):
@@ -174,7 +172,7 @@ class Registry(oras.provider.Registry):
             manifest["layers"].append(layer)
 
             # Upload the blob layer
-            logger.info(f"Uploading {blob} to {container.uri}")
+            logger.info(f"Uploading {blob_name} to {container.uri}")
             response = self.upload_blob(blob, container, layer)
             self._check_200_response(response)
 

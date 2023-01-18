@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import logging
 import os
 import pathlib
 import platform
@@ -15,9 +14,8 @@ from conda_package_handling import api
 import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.util as util
 from conda_oci_mirror.decorators import classretry, retry
+from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import Pusher
-
-logger = logging.getLogger(__name__)
 
 
 def check_checksum(path, package_dict):
@@ -31,7 +29,7 @@ def check_checksum(path, package_dict):
         hash_func = hashlib.md5()
         expected = package_dict["md5"]
     else:
-        print("NO HASHES FOUND!")
+        logger.warning("NO HASHES FOUND!")
         return True
 
     with open(path, "rb") as f:
@@ -215,7 +213,7 @@ class Package:
             )
 
             if dry_run:
-                print(
+                logger.info(
                     f"Would be pushing to {self.namespace}:{json.dumps(pusher.layers, indent=4)}"
                 )
                 return
