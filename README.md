@@ -119,6 +119,12 @@ will fall back to insecure mode given that you've provided http://.
 $ conda-oci mirror --channel conda-forge --package testinfra --user dinosaur --host http://127.0.0.0:5000 --subdir noarch
 ```
 
+And run tests:
+
+```bash
+$ pytest -xs conda_oci_mirror/tests/*.py
+```
+
 See [TODO.md](TODO.md) for some questions and items to do.
 
 ### Linting

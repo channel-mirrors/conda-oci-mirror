@@ -42,15 +42,15 @@ class Mirror:
     def __init__(
         self,
         channels,
-        subdirs,
         packages,
+        subdirs=None,
         namespace=None,
         host=None,
         cache_dir=None,
         quiet=False,
     ):
         self.channels = channels
-        self.subdirs = subdirs
+        self.subdirs = subdirs or defaults.DEFAULT_SUBDIRS
         self.packages = packages
 
         # Default mirrors are here
