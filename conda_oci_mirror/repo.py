@@ -67,6 +67,7 @@ class PackageRepo:
         Push the repodata.json to a named registry from root context.
         """
         repodata = self.get_repodata()
+        pushes = []
 
         # title is used for archive name (path extracted to) so relative to root
         title = os.path.relpath(repodata, root)
@@ -81,7 +82,10 @@ class PackageRepo:
         # Push for a tag for the date, and latest
         for tag in pusher.created_at, "latest":
             logger.info(f"  pushing tag {tag}")
-            pusher.push(f"{uri}:{tag}")
+            pushes.append(pusher.push(f"{uri}:{tag}"))
+
+        # Return pushes
+        return pushes
 
     def load_repodata(self):
         """

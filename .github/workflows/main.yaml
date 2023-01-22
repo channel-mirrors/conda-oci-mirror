@@ -43,6 +43,7 @@ jobs:
         run: |
           export PATH="/usr/share/miniconda/bin:$PATH"
           source activate mirror
+          conda install conda-build
           pip install .
           pytest -xs conda_oci_mirror/tests/*.py
 

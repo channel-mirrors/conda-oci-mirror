@@ -98,6 +98,9 @@ class Mirror:
         # Create a task runner (defaults to 4 processes)
         runner = tasks.TaskRunner()
 
+        # Keep track of items pushes to return to client
+        items = []
+
         # If they think they are pushing but no auth, they are not :)
         if not oras.has_auth and dry_run is False:
             logger.warning(
@@ -134,10 +137,11 @@ class Mirror:
                 continue
 
             # Use oras to push updated repository data and run tasks
-            repo.upload(self.registry, cache_dir)
+            items += repo.upload(self.registry, cache_dir)
 
         # Once we get here, run all tasks
         runner.run()
+        return items
 
     def iter_channels(self):
         """
@@ -154,6 +158,7 @@ class Mirror:
         """
         util.print_item("From: ", self.registry)
         util.print_item("  To: ", self.cache_dir)
+        pulls = []
 
         for channel, subdir, cache_dir in self.iter_channels():
 
@@ -167,7 +172,7 @@ class Mirror:
                 )[0]
                 repodata = util.read_json(index_file)
                 packages = set([p["name"] for _, p in repodata["packages"].items()])
-                logger.info(f"Found len(packages) packages from {uri}")
+                logger.info(f"Found {len(packages)} packages from {uri}")
 
             except Exception as e:
                 packages = set()
@@ -188,11 +193,13 @@ class Mirror:
 
                 # Not every package is guaranteed to exist
                 try:
-                    oras.pull_by_media_type(
+                    new_pull = oras.pull_by_media_type(
                         uri, cache_dir, defaults.package_tarbz2_media_type
                     )
+                    pulls.append(new_pull)
                 except Exception as e:
                     logger.warning(f"Cannot pull package {package}: {e}")
+        return pulls
 
     def push_new(self, dry_run=False):
         """
@@ -200,6 +207,7 @@ class Mirror:
         """
         util.print_item("From: ", self.cache_dir)
         util.print_item("  To: ", self.registry)
+        pushes = []
 
         for channel, subdir, cache_dir in self.iter_channels():
 
@@ -239,9 +247,11 @@ class Mirror:
                     namespace=self.registry,
                     existing_file=str(package_name),
                 )
-                package.upload(dry_run, timestamp)
+                pushes.append(package.upload(dry_run, timestamp))
 
             # If we cleanup, remove repodata.json and replace back with original
             os.remove(orig_repodata)
             if os.path.exists(backup_repodata):
                 shutil.move(backup_repodata, orig_repodata)
+
+        return pushes

@@ -80,6 +80,9 @@ class Pusher:
         with oraslib.utils.workdir(self.root):
             oras.push(uri, self.layers)
 
+        # Return lookup with URI and layers
+        return {"uri": uri, "layers": self.layers}
+
 
 # Cache of manifests
 manifest_cache = {}

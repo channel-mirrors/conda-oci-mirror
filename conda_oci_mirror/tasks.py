@@ -39,8 +39,8 @@ class Task:
                 time.sleep((lt + rt) - now)
             last_upload_time.value = now
 
-        # This has retry wrapper
-        self.pkg.upload(self.dry_run)
+        # This has retry wrapper - we get back metadata about the package pushed
+        result = self.pkg.upload(self.dry_run)
 
         with package_counter.get_lock(), counter_start.get_lock():
             package_counter.value += 1
@@ -56,6 +56,7 @@ class Task:
 
         # delete the package
         self.pkg.delete()
+        return result
 
 
 class TaskRunner:
@@ -78,6 +79,8 @@ class TaskRunner:
         with counter_start.get_lock():
             counter_start.value = time.time()
 
+        # Keep track of results
+        items = []
         # for task in tasks:
         #     # start = time.time()
         #     task.run()
@@ -90,7 +93,13 @@ class TaskRunner:
         #         print("Sleeping for ", 3 - elapsed)
         #         time.sleep(3 - elapsed)
         with mp.Pool(processes=self.workers) as pool:
-            pool.map(run_task, self.tasks)
+            for result in pool.map(run_task, self.tasks):
+
+                # This is a smaller list of packages pushes
+                items += result
+
+        # Return all results from running the task
+        return items
 
 
 def run_task(t):

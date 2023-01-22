@@ -63,7 +63,7 @@ def test_mirror(tmp_path, subdir):
         namespace=user,
         cache_dir=cache_dir,
     )
-    m.update()
+    assert len(m.update()) >= 2
 
     # Each subdir should have a directory in the cache with repodata
     # and nothing else

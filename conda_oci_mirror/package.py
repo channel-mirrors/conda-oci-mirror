@@ -172,6 +172,9 @@ class Package:
         """
         extra_tags = extra_tags or ["latest"]
 
+        # Return list of items we uploaded
+        items = []
+
         # If we are not given an iterable
         if not isinstance(extra_tags, (list, set, tuple)):
             extra_tags = set([extra_tags])
@@ -216,7 +219,7 @@ class Package:
                 logger.info(
                     f"Would be pushing to {self.namespace}:{json.dumps(pusher.layers, indent=4)}"
                 )
-                return
+                return items
 
             name = self.package_name_bare
             version_and_build = self.tag
@@ -240,5 +243,5 @@ class Package:
             # Push main tag and extras
             uri = f"{self.namespace}/{self.channel}/{self.subdir}/{name}"
             for tag in [version_and_build] + list(extra_tags):
-                pusher.push(f"{uri}:{tag}")
-            return index
+                items.append(pusher.push(f"{uri}:{tag}"))
+            return items
