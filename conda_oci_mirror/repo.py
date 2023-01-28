@@ -3,9 +3,11 @@
 import datetime
 import fnmatch
 import os
+import tarfile
 
 import requests
 
+import conda_oci_mirror.decorators as decorators
 import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.util as util
 from conda_oci_mirror.logger import logger
@@ -18,13 +20,24 @@ existing_tags_cache = {}
 class PackageRepo:
     """
     A package repository manages a conda package repository.
+
+    Note that a PackageRepo can be used as the previous "SubdirAccessor"
     """
 
-    def __init__(self, channel, subdir, cache_dir):
+    def __init__(self, channel, subdir, cache_dir, registry=None):
         self.channel = channel
         self.subdir = subdir
         self.cache_dir = cache_dir or defaults.CACHE_DIR
         self.timestamp = None
+
+        # Can be over-ridden by upload/tags/packages functions if desired
+        self.registry = registry
+
+        # Should the registry requests use http or https?
+        global oras
+        insecure = True if self.registry.startswith("http://") else False
+        if insecure:
+            oras.set_insecure()
 
     @property
     def repodata(self):
@@ -36,6 +49,57 @@ class PackageRepo:
 
     def exists(self):
         return os.path.exists(self.repodata)
+
+    @decorators.require_registry
+    def get_index_json(self, package):
+        """
+        Get the index.json for a particular package
+        """
+        container = f"{self.registry}/{self.channel}/{self.subdir}/{package}"
+
+        # We pull to the higher up cache directory, which should extract to cache
+        # E.g., '/tmp/pytest-of-vanessa/pytest-19/test_package_repo_linux_64_0/cache
+        # and we extract '<ditto>/cache/zlib-1.2.11-0/info/index.json
+        res = oras.pull_by_media_type(
+            container, self.cache_dir, defaults.info_index_media_type
+        )
+        if not res:
+            raise ValueError(
+                f"Cannot pull {container} {defaults.info_index_media_type}, does not exist."
+            )
+        return util.read_json(res[0])
+
+    @decorators.require_registry
+    def get_info(self, package):
+        """
+        Get the package info, returns an opened tarfile.
+
+        We can change this to be something else (e.g., member retrieval) if desired.
+        """
+        container = f"{self.registry}/{self.channel}/{self.subdir}/{package}"
+        res = oras.pull_by_media_type(
+            container, self.cache_dir, defaults.info_archive_media_type
+        )
+        if not res:
+            raise ValueError(
+                f"Cannot pull {container} {defaults.info_archive_media_type}, does not exist."
+            )
+        return tarfile.open(res[0], "r:gz")
+
+    @decorators.require_registry
+    def get_package(self, package):
+        """
+        Get the pull package .tar.bz2 file
+        """
+        container = f"{self.registry}/{self.channel}/{self.subdir}/{package}"
+        res = oras.pull_by_media_type(
+            container, self.cache_dir, defaults.package_tarbz2_media_type
+        )
+        if not res:
+            raise ValueError(
+                f"Cannot pull {container} {defaults.package_tarbz2_media_type}, does not exist."
+            )
+        return res[0]
 
     def ensure_timestamp(self):
         """
@@ -62,10 +126,11 @@ class PackageRepo:
         self.ensure_timestamp()
         return self.repodata
 
-    def upload(self, registry, root):
+    def upload(self, root, registry=None):
         """
         Push the repodata.json to a named registry from root context.
         """
+        registry = registry or self.registry
         repodata = self.get_repodata()
         pushes = []
 
@@ -95,10 +160,11 @@ class PackageRepo:
             self.get_repodata()
         return util.read_json(self.repodata)
 
-    def find_packages(self, namespace, names=None, skips=None):
+    def find_packages(self, names=None, skips=None, registry=None):
         """
         Given loaded repository data, find packages of interest
         """
+        registry = registry or self.registry
         skips = skips or []
         data = self.load_repodata()
 
@@ -114,14 +180,18 @@ class PackageRepo:
             if skips and info["name"] in skips:
                 continue
 
-            existing_packages = self.get_existing_packages(info["name"], namespace)
+            existing_packages = self.get_existing_packages(
+                info["name"], registry=registry
+            )
             if pkg not in existing_packages:
                 yield pkg, info
 
-    def get_existing_tags(self, package, namespace):
+    def get_existing_tags(self, package, registry=None):
         """
         Get existing tags for a package name
         """
+        registry = registry or self.registry
+
         global existing_tags_cache
 
         # These are empty packages that serve as helpers
@@ -132,16 +202,17 @@ class PackageRepo:
             return existing_tags_cache[package]
 
         # GitHub packages name
-        gh_name = f"{namespace}/{self.channel}/{self.subdir}/{package}"
+        gh_name = f"{registry}/{self.channel}/{self.subdir}/{package}"
 
         # We likely want this to raise an error if there is one.
         tags = oras.get_tags(gh_name).json().get("tags", [])
         existing_tags_cache[package] = tags
         return tags
 
-    def get_existing_packages(self, namespace, package):
+    def get_existing_packages(self, package, registry=None):
         """
         Get existing package .tar.bz2 files for each tag
         """
-        tags = self.get_existing_tags(namespace, package)
+        registry = registry or self.registry
+        tags = self.get_existing_tags(registry, package)
         return set(f"{package}-{tag}.tar.bz2" for tag in tags)

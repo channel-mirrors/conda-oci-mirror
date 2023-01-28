@@ -18,8 +18,9 @@ def main():
 options = [
     click.option("-s", "--subdir", default=defaults.DEFAULT_SUBDIRS, multiple=True),
     click.option("-p", "--package", help="Select packages", default=[], multiple=True),
-    click.option("--user", default=None, help="Username for ghcr.io"),
-    click.option("--host", default="ghcr.io", help="Host for your registry"),
+    click.option(
+        "--registry", default=None, help="Registry URI (e.g., ghcr.io/username)"
+    ),
     click.option("--dry-run/--no-dry-run", default=False, help="Dry run?"),
     click.option("--cache-dir", default=default_cache, help="Path to cache directory"),
     click.option("-c", "--channel", help="Select channel", default="conda-forge"),
@@ -43,17 +44,16 @@ def add_options(options):
 
 @main.command()
 @add_options(options)
-def mirror(channel, subdir, user, package, host, cache_dir, dry_run, quiet, debug):
+def mirror(channel, subdir, registry, package, cache_dir, dry_run, quiet, debug):
     setup_logger(
         quiet=quiet,
         debug=debug,
     )
     m = Mirror(
-        channels=[channel],
+        channel=channel,
         subdirs=subdir,
         packages=package,
-        host=host,
-        namespace=user,
+        registry=registry,
         cache_dir=cache_dir,
     )
     m.update(dry_run)
@@ -61,7 +61,7 @@ def mirror(channel, subdir, user, package, host, cache_dir, dry_run, quiet, debu
 
 @main.command()
 @add_options(options)
-def pull_cache(channel, user, subdir, package, host, cache_dir, dry_run, quiet, debug):
+def pull_cache(channel, subdir, registry, package, cache_dir, dry_run, quiet, debug):
     """
     Pull a remote host/user to a local cache_dir
     """
@@ -70,11 +70,10 @@ def pull_cache(channel, user, subdir, package, host, cache_dir, dry_run, quiet, 
         debug=debug,
     )
     m = Mirror(
-        channels=[channel],
+        channel=channel,
         subdirs=subdir,
         packages=package,
-        host=host,
-        namespace=user,
+        registry=registry,
         cache_dir=cache_dir,
     )
     m.pull_latest(dry_run)
@@ -82,7 +81,7 @@ def pull_cache(channel, user, subdir, package, host, cache_dir, dry_run, quiet, 
 
 @main.command()
 @add_options(options)
-def push_cache(channel, user, subdir, package, host, cache_dir, dry_run, quiet, debug):
+def push_cache(channel, subdir, registry, package, cache_dir, dry_run, quiet, debug):
     """
     Push a local cache in cache_dir to a remote host/user
     """
@@ -91,11 +90,10 @@ def push_cache(channel, user, subdir, package, host, cache_dir, dry_run, quiet, 
         debug=debug,
     )
     m = Mirror(
-        channels=[channel],
+        channel=channel,
         subdirs=subdir,
         packages=package,
-        host=host,
-        namespace=user,
+        registry=registry,
         cache_dir=cache_dir,
     )
     m.push_new(dry_run)

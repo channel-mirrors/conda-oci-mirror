@@ -4,6 +4,21 @@ from functools import partial, update_wrapper
 from conda_oci_mirror.logger import logger
 
 
+class Decorator:
+    """
+    Shared parent decorator class
+    """
+
+    def __init__(self, func, attempts=5, timeout=2):
+        update_wrapper(self, func)
+        self.func = func
+        self.attempts = attempts
+        self.timeout = timeout
+
+    def __get__(self, obj, objtype):
+        return partial(self.__call__, obj)
+
+
 def retry(attempts, timeout=2):
     """
     A simple retry decorator
@@ -27,7 +42,7 @@ def retry(attempts, timeout=2):
     return decorator
 
 
-class classretry:
+class classretry(Decorator):
     """
     Retry a function that is part of a class
     """
@@ -37,9 +52,6 @@ class classretry:
         self.func = func
         self.attempts = attempts
         self.timeout = timeout
-
-    def __get__(self, obj, objtype):
-        return partial(self.__call__, obj)
 
     def __call__(self, cls, *args, **kwargs):
         attempt = 0
@@ -53,4 +65,19 @@ class classretry:
                 logger.info(f"Retrying in {sleep} seconds - error: {e}")
                 time.sleep(sleep)
                 attempt += 1
+        return self.func(cls, *args, **kwargs)
+
+
+class require_registry(Decorator):
+    """
+    Require the class to have a registry.
+    """
+
+    def __get__(self, obj, objtype):
+        return partial(self.__call__, obj)
+
+    def __call__(self, cls, *args, **kwargs):
+
+        if not hasattr(cls, "registry") or not cls.registry:
+            raise ValueError('A "registry" is required on the class for this function.')
         return self.func(cls, *args, **kwargs)

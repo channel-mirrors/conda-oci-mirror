@@ -89,6 +89,12 @@ manifest_cache = {}
 
 
 class Registry(oras.provider.Registry):
+    def set_insecure(self):
+        """
+        Change the prefix used (http/https) based on user preference.
+        """
+        self.prefix = "http"
+
     @ensure_container
     def pull_by_media_type(self, container, dest, media_type=None):
         """

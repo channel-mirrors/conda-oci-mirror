@@ -20,5 +20,4 @@
 
 ### Questions
 
-- If we are doing a mirror and selecting a particular package(s) - why do we update all repodata to include all packages even if a package of interest does not exist? What should be the default?
-- Can we have the push/pull-cache also be done in parallel?
+- If we are doing a mirror and selecting a particular package(s) - why do we update all repodata to include all packages even if a package of interest does not exist? What should be the default?git

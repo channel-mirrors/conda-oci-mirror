@@ -74,9 +74,10 @@ class Package:
         subdir,
         package,
         cache_dir,
-        namespace,
+        registry,
         info=None,
         existing_file=None,
+        timestamp=None,
     ):
         """
         Info is only required if the file does not exist yet.
@@ -86,9 +87,10 @@ class Package:
         self.package = package
         self.package_info = info
         self.cache_dir = cache_dir
-        self.namespace = namespace
+        self.registry = registry
         self._package_name = None
         self.file = existing_file
+        self.timestamp = timestamp
 
     def ensure_file(self):
         """
@@ -170,7 +172,9 @@ class Package:
         """
         Upload a conda package archive.
         """
-        extra_tags = extra_tags or ["latest"]
+        # Optionally honor the timestamp provided by the package
+        timestamp = timestamp or self.timestamp
+        extra_tags = extra_tags or []
 
         # Return list of items we uploaded
         items = []
@@ -217,7 +221,7 @@ class Package:
 
             if dry_run:
                 logger.info(
-                    f"Would be pushing to {self.namespace}:{json.dumps(pusher.layers, indent=4)}"
+                    f"Would be pushing to {self.registry}:{json.dumps(pusher.layers, indent=4)}"
                 )
                 return items
 
@@ -241,7 +245,7 @@ class Package:
                 name = f"zzz{name}"
 
             # Push main tag and extras
-            uri = f"{self.namespace}/{self.channel}/{self.subdir}/{name}"
+            uri = f"{self.registry}/{self.channel}/{self.subdir}/{name}"
             for tag in [version_and_build] + list(extra_tags):
                 items.append(pusher.push(f"{uri}:{tag}"))
             return items

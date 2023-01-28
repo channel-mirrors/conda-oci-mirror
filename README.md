@@ -50,7 +50,7 @@ $ conda-oci mirror --channel conda-forge --package zlib --dry-run
 And then for realsies, here we want to push to our organization `myorg`
 
 ```bash
-$ conda-oci mirror --channel conda-forge --package zlib --user myorg
+$ conda-oci mirror --channel conda-forge --package zlib --registry ghcr.io/myorg
 ```
 
 For this command, we are pulling packages from a **channel** and mirroring to the
@@ -63,19 +63,19 @@ The same authentication is needed only if the registry packages are
 private or internal. Akin to the others, you can start with a `--dry-run`
 
 ```bash
-$ conda-oci pull-cache --user researchapps --dry-run
+$ conda-oci pull-cache --registry ghcr.io/researchapps --dry-run
 ```
 
 Target a specific arch (subdir of the cache) and one package we know exist
 
 ```bash
-$ conda-oci pull-cache --user researchapps --dry-run --subdir linux-64
+$ conda-oci pull-cache --registry ghcr.io/researchapps --dry-run --subdir linux-64
 ```
 
 If you want to preview what would be pulled, set `--dry-run`:
 
 ```bash
-$ conda-oci pull-cache --user researchapps --dry-run --subdir linux-64 --package zlib --dry-run
+$ conda-oci pull-cache --registry ghcr.io/researchapps --dry-run --subdir linux-64 --package zlib --dry-run
 ```
 
 ```console
@@ -93,7 +93,7 @@ This command will require authentication, and you are also encouraged to use
 `--dry-run` first.
 
 ```bash
-$ conda-oci push-cache --user researchapps --dry-run --package zlib --subdir linux-64
+$ conda-oci push-cache --registry ghcr.io/researchapps --dry-run --package zlib --subdir linux-64
 ```
 
 ### Development
@@ -103,7 +103,7 @@ as discussed above. Then ensure that `--user` is targeting your GitHub user or o
 account to push to:
 
 ```bash
-$ conda-oci mirror --channel conda-forge --package zlib --user researchapps
+$ conda-oci mirror --channel conda-forge --package zlib --registry ghcr.io/researchapps
 ```
 
 You can also develop with a local registry (instead of ghcr.io):
@@ -112,11 +112,11 @@ You can also develop with a local registry (instead of ghcr.io):
 $ docker run -it --rm -p 5000:5000 ghcr.io/oras-project/registry:latest
 ```
 
-And then specify the host and namespace for that registry - oras
+And then specify your local registry - oras
 will fall back to insecure mode given that you've provided http://.
 
 ```bash
-$ conda-oci mirror --channel conda-forge --package testinfra --user dinosaur --host http://127.0.0.0:5000 --subdir noarch
+$ conda-oci mirror --channel conda-forge --package testinfra --registry http://127.0.0.0:5000/dinosaur --subdir noarch
 ```
 
 And run tests:

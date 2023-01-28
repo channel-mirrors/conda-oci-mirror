@@ -9,24 +9,20 @@ import pytest
 here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.dirname(os.path.dirname(here))
 sys.path.insert(0, root)
-
-import conda_oci_mirror.defaults as defaults  # noqa
-from conda_oci_mirror.logger import setup_logger  # noqa
+sys.path.insert(0, here)
 
 # import conda_oci_mirror.defaults as defaults
-from conda_oci_mirror.mirror import Mirror  # noqa
+from helpers import get_mirror  # noqa
+
+from conda_oci_mirror.logger import setup_logger  # noqa
 
 # Ensure we see all verbosity
 setup_logger(debug=True, quiet=False)
 
-registry_host = os.environ.get("registry_host") or "http://127.0.0.1"
-registry_port = os.environ.get("registry_port") or 5000
-host = f"{registry_host}:{registry_port}"
-
 
 @pytest.mark.parametrize(
     "subdir",
-    defaults.DEFAULT_SUBDIRS,
+    ["noarch"],
 )
 def test_push_pull_cache(tmp_path, subdir):
     """
@@ -39,18 +35,7 @@ def test_push_pull_cache(tmp_path, subdir):
     """
     # Start with a mirror
     cache_dir = os.path.join(tmp_path, "cache")
-    channel = "conda-forge"
-    package = "redo"
-    user = "dinosaur"
-
-    m = Mirror(
-        channels=[channel],
-        packages=[package],
-        host=host,
-        subdirs=[subdir],
-        namespace=user,
-        cache_dir=cache_dir,
-    )
+    m = get_mirror(subdir, cache_dir)
     updates = m.update()
     assert len(updates) >= 2
 

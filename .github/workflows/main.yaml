@@ -92,11 +92,11 @@ jobs:
           source activate mirror
 
           # First run mirror
-          conda-oci mirror --channel ${channel} --subdir ${subdir} --package ${package} --user dinosaur --host http://${registry_host}:${registry_port}
+          conda-oci mirror --channel ${channel} --subdir ${subdir} --package ${package} --registry http://${registry_host}:${registry_port}/dinosaur
 
           # Then run pull-cache and push-cache
-          conda-oci pull-cache --user dinosaur --subdir ${subdir} --package ${package} --host http://${registry_host}:${registry_port}
-          conda-oci push-cache --user dinosaur --subdir ${subdir} --package ${package} --host http://${registry_host}:${registry_port}
+          conda-oci pull-cache --registry http://${registry_host}:${registry_port}/dinosaur --subdir ${subdir} --package ${package}
+          conda-oci push-cache --registry http://${registry_host}:${registry_port}/dinosaur --subdir ${subdir} --package ${package}
 
       - name: View Cache
         run: sudo apt-get install -y tree && tree ./cache
