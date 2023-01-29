@@ -1,6 +1,7 @@
 # Packages and functions for them
 
 import datetime
+import distutils.version
 import fnmatch
 import os
 import tarfile
@@ -15,6 +16,125 @@ from conda_oci_mirror.oras import Pusher, oras
 
 # This is shared between PackageRepo instances
 existing_tags_cache = {}
+
+
+# Mapping of extensions to media types
+package_extensions = {
+    "tar.bz2": defaults.package_tarbz2_media_type,
+    "conda": defaults.package_conda_media_type,
+}
+
+
+class RepoData:
+    """
+    Courtesy wrapper to repodata to get packages, save, etc.
+    """
+
+    def __init__(self, filename=None, package_types=None):
+
+        self.filename = filename
+
+        # Control access to package types
+        # We don't expose this yet, but eventually could
+        self.package_types = package_types or ["packages", "packages.conda"]
+        self.data = {package_type: {} for package_type in self.package_types}
+
+        # Loading data here (or with load) over-rides the dummy empty data above
+        if filename is not None:
+            self.load(filename)
+
+    def load(self, filename):
+        """
+        Load a filename into the repository data.
+        """
+        self.filename = os.path.abspath(filename)
+        self.data = util.read_json(filename)
+
+    @property
+    def packages(self):
+        """
+        Yield all package types, the filename and info
+        """
+        for key in self.package_types:
+            for package_file, info in self.data.get(key, {}).items():
+                yield package_file, info
+
+    @property
+    def package_archives(self):
+        """
+        Return flat list of package archive file names
+        """
+        return [x[0] for x in list(self.packages)]
+
+    def filtered_packages(self, names):
+        """
+        Yield a subset of packages in a set of names
+        """
+        # We can optionally accept a single string name
+        if isinstance(names, str):
+            names = [names]
+        names = set(names)
+        for package_file, info in self.packages:
+            if info["name"] not in names:
+                continue
+            yield package_file, info
+
+    def get_package_extension(self, pkg):
+        """
+        Get the package extension - sanity check it's conda or tar.bz2.
+        """
+        for ext in package_extensions:
+            if pkg.endswith(ext):
+                return ext
+        raise ValueError(f"Unrecognized package extension for {pkg}")
+
+    def get_package_mediatype(self, pkg):
+        """
+        Get the correct media type to ask for.
+        """
+        for ext, media_type in package_extensions.items():
+            if pkg.endswith(ext):
+                return media_type
+        raise ValueError(f"Unrecognized package looking up media type {pkg}")
+
+    @property
+    def package_names(self):
+        """
+        Return unique set of package names
+        """
+        return set(x[1]["name"] for x in self.packages)
+
+    def get_latest_tag(self, package):
+        """
+        Try to get the latest tag based on build number / version string.
+        """
+        # Subset to the info of those we care about
+        subset = [info for _, info in self.filtered_packages(package)]
+
+        # Cut out early if we don't have any packages
+        if not subset:
+            return
+
+        # First, for each build, get the latest version based on build number
+        packages = {}
+        for entry in subset:
+            if entry["version"] not in packages:
+                packages[entry["version"]] = entry
+                continue
+
+            is_newer = (
+                entry["build_number"] > packages[entry["version"]]["build_number"]
+            )
+            if entry["version"] in packages and is_newer:
+                packages[entry["version"]] = entry
+
+        # Find latest tag from set of highest build numbers
+        tags = list(packages)
+        tags.sort(key=distutils.version.StrictVersion)
+
+        # The tag is technically the version + build number
+        latest = packages[tags[-1]]
+        return f"{latest['version']}-{latest['build']}"
 
 
 class PackageRepo:
@@ -89,15 +209,22 @@ class PackageRepo:
     @decorators.require_registry
     def get_package(self, package):
         """
-        Get the pull package .tar.bz2 file
+        Get the pull package .conda or .tar.bz2 file
         """
         container = f"{self.registry}/{self.channel}/{self.subdir}/{package}"
-        res = oras.pull_by_media_type(
-            container, self.cache_dir, defaults.package_tarbz2_media_type
-        )
+
+        # Try for latest .conda version first
+        res = None
+        for _, media_type in package_extensions.items():
+            res = oras.pull_by_media_type(container, self.cache_dir, media_type)
+            if res:
+                break
+
+        # We cannot find either media type
         if not res:
+            media_types = list(package_extensions.values())
             raise ValueError(
-                f"Cannot pull {container} {defaults.package_tarbz2_media_type}, does not exist."
+                f"Cannot pull {container} no media types {media_types} exist."
             )
         return res[0]
 
@@ -158,7 +285,7 @@ class PackageRepo:
         """
         if not self.exists():
             self.get_repodata()
-        return util.read_json(self.repodata)
+        return RepoData(self.repodata)
 
     def find_packages(self, names=None, skips=None, registry=None):
         """
@@ -166,10 +293,11 @@ class PackageRepo:
         """
         registry = registry or self.registry
         skips = skips or []
-        data = self.load_repodata()
+        repodata = self.load_repodata()
 
-        # Look through package info
-        for pkg, info in data.get("packages", {}).items():
+        # Look through package info for conda and regular packages
+        # These don't overlap, version wise, so it's safe to do.
+        for pkg, info in repodata.packages:
 
             # Case 1: we are given packages to filter to
             if names:
@@ -180,9 +308,14 @@ class PackageRepo:
             if skips and info["name"] in skips:
                 continue
 
+            # Existing packages for this will depend on the extension
             existing_packages = self.get_existing_packages(
-                info["name"], registry=registry
+                info["name"],
+                registry=registry,
+                package_ext=repodata.get_package_extension(pkg),
             )
+
+            # This check includes extension, so shouldn't be an issue
             if pkg not in existing_packages:
                 yield pkg, info
 
@@ -209,10 +342,13 @@ class PackageRepo:
         existing_tags_cache[package] = tags
         return tags
 
-    def get_existing_packages(self, package, registry=None):
+    def get_existing_packages(self, package, registry=None, package_ext="conda"):
         """
-        Get existing package .tar.bz2 files for each tag
+        Get existing package files files for each tag
+
+        The extension depends on whether the package is the new format
+        (.conda) vs old (tar.bz2)
         """
         registry = registry or self.registry
-        tags = self.get_existing_tags(registry, package)
-        return set(f"{package}-{tag}.tar.bz2" for tag in tags)
+        tags = self.get_existing_tags(package, registry=registry)
+        return set(f"{package}-{tag}.{package_ext}" for tag in tags)

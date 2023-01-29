@@ -12,7 +12,7 @@ sys.path.insert(0, root)
 
 from helpers import get_mirror, get_tags  # noqa
 
-import conda_oci_mirror.util as util  # noqa
+import conda_oci_mirror.repo as repository  # noqa
 from conda_oci_mirror.logger import setup_logger  # noqa
 
 # import conda_oci_mirror.defaults as defaults
@@ -23,10 +23,13 @@ setup_logger(debug=True, quiet=False)
 
 
 @pytest.mark.parametrize(
-    "subdir",
-    ["noarch"],
+    "subdir,package,ext",
+    [
+        ("noarch", "redo", "bz2"),
+        ("noarch", "zope.event", "conda"),
+    ],
 )
-def test_mirror(tmp_path, subdir):
+def test_mirror(tmp_path, subdir, package, ext):
     """
     Test creation of a mirror
 
@@ -36,7 +39,7 @@ def test_mirror(tmp_path, subdir):
     and checking file structure and/or size.
     """
     cache_dir = os.path.join(tmp_path, "cache")
-    m = get_mirror(subdir, cache_dir)
+    m = get_mirror(subdir, cache_dir, package=package)
     assert len(m.update()) >= 2
 
     # Each subdir should have a directory in the cache with repodata
@@ -46,10 +49,13 @@ def test_mirror(tmp_path, subdir):
     "repodata.json" in os.listdir(cache_subdir)
     len(os.listdir(cache_subdir)) == 1
     repodata_file = os.path.join(cache_subdir, "repodata.json")
-    repodata = util.read_json(repodata_file)
+    repodata = repository.RepoData(repodata_file)
 
     # Smallest size is osx-arm64
-    assert "packages" in repodata and len(repodata["packages"]) >= 40000
+    for key in ["packages", "packages.conda"]:
+        assert key in repodata.data
+        # packages has over 40000, conda has > 70000
+        assert len(repodata.data[key]) >= 7000
 
     # We can use oras to get artifacts we should have pushed
     # We should be able to pull the latest tag
@@ -67,7 +73,7 @@ def test_mirror(tmp_path, subdir):
 
     # It should be the same file!
     os.stat(result[0]).st_size == os.stat(repodata_file).st_size
-    package_names = set([x["name"] for _, x in repodata["packages"].items()])
+    package_names = repodata.package_names
 
     # Looks like only noarch has redo
     if subdir != "noarch":
@@ -79,12 +85,13 @@ def test_mirror(tmp_path, subdir):
     tags = get_tags(expected_repo)
     assert len(tags["tags"]) >= 1
 
-    tag = tags["tags"][0]
+    # Get the latest tag - should be newer at end (e.g., conda)
+    tag = tags["tags"][-1]
     pull_dir = os.path.join(tmp_path, "package")
     result = oras.pull(target=f"{expected_repo}:{tag}", outdir=pull_dir)
     assert result
 
-    # This directory has .bz2 and subdirectory
+    # This directory has .bz2 or conda and subdirectory
     # Here we are checking for the package archive and info files
     found = os.listdir(pull_dir)
     assert len(found) == 2
@@ -97,4 +104,4 @@ def test_mirror(tmp_path, subdir):
             assert "index.json" in os.listdir(fullpath)
             continue
 
-        assert fullpath.endswith("bz2")
+        assert fullpath.endswith(ext)

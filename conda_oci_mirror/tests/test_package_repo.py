@@ -25,10 +25,13 @@ setup_logger(debug=True, quiet=False)
 
 # Linux 64 for zlib has a lot of versions
 @pytest.mark.parametrize(
-    "subdir",
-    ["linux-64"],
+    "subdir,pkg,ext",
+    [
+        ("linux-64", "zlib", "tar.bz2"),
+        ("noarch", "zope.event", "conda"),
+    ],
 )
-def test_package_repo(tmp_path, subdir):
+def test_package_repo(tmp_path, subdir, pkg, ext):
     """
     Test package repo
 
@@ -40,16 +43,18 @@ def test_package_repo(tmp_path, subdir):
     cache_dir = os.path.join(tmp_path, "cache")
 
     # Do a quick mirror so we have the package to get in a remote!
-    m = get_mirror(subdir, cache_dir, package="zlib")
+    m = get_mirror(subdir, cache_dir, package=pkg)
 
     # There is no latest tag, so we need to get tags from here
     res = m.update()
 
-    # Get a zlib package URI
-    package = [x for x in res if "zlib" in x["uri"]][0]
+    # Get a package URI (last one should be latest)
+    # Note that if you run this test twice on the same registry
+    # since the packages are already mirrored you'll get an empty list
+    package = [x for x in res if pkg in x["uri"]][-1]
     assert package
 
-    # 'zlib:1.2.11-0'
+    # 'zlib:1.2.11-0' or zope..etc
     package_name = package["uri"].rsplit("/", 1)[-1]
 
     # Our package remote is "dinosaur" and not "conda-forge"
@@ -66,7 +71,6 @@ def test_package_repo(tmp_path, subdir):
         "build_number",
         "depends",
         "license",
-        "license_family",
         "name",
         "platform",
         "subdir",
@@ -79,14 +83,10 @@ def test_package_repo(tmp_path, subdir):
     assert isinstance(info, tarfile.TarFile)
     members = list(info)
 
-    # These are the names we expect to see
+    # These are the names we expect to see (shared between formats)
     should_find = {
-        "LICENSE.txt",
-        "about.json",
         "files",
-        "has_prefix",
         "index.json",
-        "paths.json",
         "recipe",
     }
     for member in members:
@@ -97,7 +97,7 @@ def test_package_repo(tmp_path, subdir):
     if should_find:
         raise ValueError(f"Expected to find {should_find} in info, but did not.")
 
-    # Finally, get the package entirely (tar.bz2 for now)
+    # Get package will look first for the conda media type, then old format bz2
     pkg = repo.get_package(package_name)
-    assert pkg.endswith("tar.bz2")
+    assert pkg.endswith(ext)
     assert os.path.exists(pkg)

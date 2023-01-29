@@ -3,7 +3,6 @@ import os
 import pathlib
 import shutil
 import subprocess
-from distutils.version import StrictVersion
 
 import requests
 
@@ -83,7 +82,7 @@ class Mirror:
         util.print_item("Using cache dir:", self.cache_dir)
         util.print_item(" Channel  :", self.channel)
         util.print_item("  Subdirs :", self.subdirs)
-        util.print_item("  Packages:", self.packages)
+        util.print_item("  Packages:", "all" if not self.packages else self.packages)
 
     @decorators.require_registry
     def update(self, dry_run=False):
@@ -107,6 +106,7 @@ class Mirror:
             )
 
             # Run filter based on packages we are looking for, and forbidden
+            # This includes packages and packages.conda
             for package, info in repo.find_packages(self.packages, self.skip_packages):
 
                 # Add the new tasks to be run by the runner
@@ -133,8 +133,8 @@ class Mirror:
 
     def iter_subdirs(self):
         """
-                yield groups of channels, subdir, and cache directories.
-        f"""
+        yield groups of channels, subdir, and cache directories.
+        """
         for subdir in self.subdirs:
             cache_dir = os.path.join(self.cache_dir, self.channel, subdir)
             yield subdir, cache_dir
@@ -155,74 +155,54 @@ class Mirror:
             # Note that the original channel is relevant for a mirror
             uri = f"{self.registry}/{self.channel}/{subdir}/repodata.json:latest"
 
+            # Create an empty repository data
+            repodata = repository.RepoData()
+
             try:
                 # Retrieve a path to the index_file
                 index_file = oras.pull_by_media_type(
                     uri, cache_dir, defaults.repodata_media_type_v1
                 )[0]
-                repodata = util.read_json(index_file)
-                packages = set([p["name"] for _, p in repodata["packages"].items()])
-                logger.info(f"Found {len(packages)} packages from {uri}")
+                repodata.load(index_file)
+                logger.info(
+                    f"Found {len(repodata.package_archives)} packages from {uri}"
+                )
 
             except Exception as e:
-                packages = set()
                 logger.warning(f"Issue retriving uri: {uri}: {e}")
 
-            for package in packages:
+            # Don't repeat requests for same uri and media type
+            seen = set()
+            for package_file, info in repodata.packages:
+
+                # The package name
+                package = info["name"]
+
+                # The media type we will ask for
+                media_type = repodata.get_package_mediatype(package_file)
 
                 # Skip those that aren't desired if a filter is given
                 if self.packages and package not in self.packages:
                     continue
 
                 # The latest is determined by upload date
-                latest = self._get_latest_tag(repodata, package)
+                latest = repodata.get_latest_tag(package)
                 uri = f"{self.registry}/{self.channel}/{subdir}/{package}:{latest}"
+
+                # Ensure we don't run the task twice
+                if (uri, media_type) in seen:
+                    continue
 
                 # Dry run don't actually do it
                 if dry_run:
                     logger.info(f"Would be pulling {package}, but dry-run is set.")
                     continue
+                seen.add((uri, media_type))
 
                 # Not every package is guaranteed to exist
-                runner.add_task(
-                    tasks.DownloadTask(
-                        uri, cache_dir, defaults.package_tarbz2_media_type
-                    )
-                )
+                runner.add_task(tasks.DownloadTask(uri, cache_dir, media_type))
 
         return runner.run()
-
-    def _get_latest_tag(self, repodata, package):
-        """
-        Try to get the latest tag based on build number / version string.
-        """
-        # Subset to those we care about
-        subset = [p for _, p in repodata["packages"].items() if p["name"] == package]
-
-        # Cut out early if we don't have any packages
-        if not subset:
-            return
-
-        # First, for each build, get the latest version based on build number
-        packages = {}
-        for entry in subset:
-            if entry["version"] not in packages:
-                packages[entry["version"]] = entry
-                continue
-
-            is_newer = (
-                entry["build_number"] > packages[entry["version"]]["build_number"]
-            )
-            if entry["version"] in packages and is_newer:
-                packages[entry["version"]] = pkg
-
-        # Find latest tag from set of highest build numbers
-        tags = list(packages)
-        tags.sort(key=StrictVersion)
-
-        # The tag is technically the version + build number
-        latest = packages[tags[-1]]
-        return f"{latest['version']}-{latest['build']}"
 
     @decorators.require_registry
     def push_new(self, dry_run=False):
@@ -254,12 +234,17 @@ class Mirror:
             conda_index(channel_root)
 
             # Create new repodata or load existing from backup (before nuke)
+            repodata = repository.RepoData()
             if os.path.exists(backup_repodata):
-                repodata = util.read_json(backup_repodata)
-            else:
-                repodata = {"packages": []}
-            files = list(pathlib.Path(cache_dir).rglob("*.tar.bz2"))
-            new_packages = [f for f in files if f.name not in repodata["packages"]]
+                repodata.load(backup_repodata)
+
+            # Include both conda and tar.bz2 extension
+            new_packages = []
+            for ext in repository.package_extensions:
+                files = list(pathlib.Path(cache_dir).rglob(f"*.{ext}"))
+                new_packages += [
+                    f for f in files if f.name not in repodata.package_archives
+                ]
             logger.info(f"Found {len(new_packages)} new packages")
 
             # Push with an updated timestamp
@@ -286,4 +271,4 @@ class Mirror:
             if os.path.exists(backup_repodata):
                 shutil.move(backup_repodata, orig_repodata)
 
-        return pushes
+        return list(set(pushes))
