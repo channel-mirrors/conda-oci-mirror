@@ -40,6 +40,12 @@ class Pusher:
 
     @property
     def created_at(self):
+        """
+        Get the created at time.
+        """
+        # A string timestamp was already provided
+        if isinstance(self.timestamp, str):
+            return self.timestamp
         return self.timestamp.strftime("%Y.%m.%d.%H.%M")
 
     def add_layer(self, path, media_type, title=None, annotations=None):

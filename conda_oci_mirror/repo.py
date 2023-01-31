@@ -167,9 +167,6 @@ class PackageRepo:
     def name(self):
         return os.path.join(self.channel, self.subdir)
 
-    def exists(self):
-        return os.path.exists(self.repodata)
-
     @decorators.require_registry
     def get_index_json(self, package):
         """
@@ -232,19 +229,14 @@ class PackageRepo:
         """
         Ensure we have a timestamp when it was downloaded.
         """
-        if self.exists():
-            self.timestamp = datetime.datetime.fromtimestamp(
-                os.stat(self.repodata).st_ctime
-            )
-            return
         self.timestamp = datetime.datetime.now()
 
     def get_repodata(self):
         """
         Get respository metadata
         """
-        # TODO we should have a check here for timestamp, and re-retrieve if older than X
         util.mkdir_p(os.path.dirname(self.repodata))
+        logger.info(f"Downloading fresh repodata for {self.channel}/{self.subdir}")
         r = requests.get(
             f"https://conda.anaconda.org/{self.channel}/{self.subdir}/repodata.json",
             allow_redirects=True,
@@ -282,9 +274,10 @@ class PackageRepo:
     def load_repodata(self):
         """
         Load repository data (json)
+
+        We always retrieve it fresh.
         """
-        if not self.exists():
-            self.get_repodata()
+        self.get_repodata()
         return RepoData(self.repodata)
 
     def find_packages(self, names=None, skips=None, registry=None):

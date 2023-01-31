@@ -7,11 +7,24 @@ and brief usage is shown below.
 
 ## Concepts
 
-- A **mirror** means you will update a registry you have control of (push and pull) from upstream conda
-- A **pull-cache** can pull from a registry that you may not be able to write to, to your local cache.
-- A **push-cache** can push your local cache to a registry you control.
+### Mirror
 
-For each interaction, the remote needs to have a repodata.json archive to know what is there.
+A **mirror** means you will copy (mirror) all packages from a regular conda-channel to an OCI registry.
+In practice, this typically means **all** packages, however for the purposes of testing we allow selection of a subset.
+You must have control of the registry you intend to mirror to, meaning you can push and pull from it.
+When you do a mirror, the repodata.json is always pulled fresh, and any local changes you've made are
+over-written. We do this so the local cache is in sync with the remote.
+
+### Pull Cache
+
+A **pull-cache** can pull from a registry that you may not be able to write to, to your local cache.
+
+### Push Cache
+
+A **push-cache** can push your local cache to a registry you control. This means that we compare packages you've
+built against what are known in the repodata.json, and we push the ones that are not known to the repodata.json.
+A push cache with the `--all` flag will push the entire contents of the local cache to your registry, regardless of
+status.
 
 ## Usage
 
@@ -116,11 +129,11 @@ from conda_oci_mirror.mirror import Mirror
 
 mirror = Mirror(
     channel="conda-forge",
-    packages=["zlib"],
+    packages=["redo"],
 
     # Push repodata and packages to this registry
     registry="http://127.0.0.1:5000/dinosaur",
-    subdirs=["linux-64"],
+    subdirs=["noarch"],
 )
 
 updates = mirror.update()
@@ -137,11 +150,11 @@ from conda_oci_mirror.mirror import Mirror
 
 mirror = Mirror(
     channel="conda-forge",
-    packages=["zlib"],
+    packages=["redo"],
 
     # Push repodata and packages to this registry
     registry="http://127.0.0.1:5000/dinosaur",
-    subdirs=["linux-64"],
+    subdirs=["noarch"],
 )
 
 latest_packages = mirror.pull_latest()
@@ -150,21 +163,34 @@ latest_packages = mirror.pull_latest()
 ### Push Cache
 
 A push cache checks your local repodata.json and finds packages that exist that aren't yet added,
-and then updates and pushes them to your registry.
+and then updates and pushes them to your registry. You can also use `push_all` to push all
+local packages regardless of presence in the repodata.json. First, here is pushing new:
 
 ```python
 from conda_oci_mirror.mirror import Mirror
 
 mirror = Mirror(
     channel="conda-forge",
-    packages=["zlib"],
+    packages=["redo"],
 
     # Push repodata and packages to this registry
     registry="http://127.0.0.1:5000/dinosaur",
-    subdirs=["linux-64"],
+    subdirs=["noarch"],
 )
 
 pushed_packages = mirror.push_new()
+```
+
+And pushing all:
+
+```python
+all_packages = mirror.push_all()
+```
+
+If you want to run in serial (for either of the above):
+
+```python
+all_packages = mirror.push_all(serial=True)
 ```
 
 Right now this is checking against the local repodata.json, and I'm not sure if this should

@@ -146,7 +146,11 @@ class TaskRunner:
         items = []
         for task in self.tasks:
             start = time.time()
-            items += task.run()
+            result = task.run()
+            if isinstance(result, list):
+                items += result
+            else:
+                items.append(result)
             end = time.time()
             elapsed = end - start
 
@@ -172,7 +176,10 @@ class TaskRunner:
             for result in pool.map(run_task, self.tasks):
 
                 # This is a smaller list of packages/repo metadata pushes
-                items += result
+                if isinstance(result, list):
+                    items += result
+                else:
+                    items.append(result)
 
         # Return all results from running the task
         return items

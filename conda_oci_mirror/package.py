@@ -184,12 +184,13 @@ class Package:
             extra_tags = set([extra_tags])
 
         with tempfile.TemporaryDirectory() as staging_dir:
+
             pusher = Pusher(staging_dir, timestamp=timestamp)
             upload_files_path = pathlib.Path(staging_dir)
             shutil.copy(self.file, staging_dir)
 
             # Prepare metadata in same staging directory
-            self.prepare_metadata(str(staging_dir))
+            self.prepare_metadata(staging_dir)
 
             # The new archive is the old filename in the new directory
             archive = os.path.join(staging_dir, os.path.basename(self.file))

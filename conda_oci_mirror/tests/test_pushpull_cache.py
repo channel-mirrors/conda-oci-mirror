@@ -42,3 +42,4 @@ def test_push_pull_cache(tmp_path, subdir):
     # Now we can use the mirror to push and pull from the cache
     m.pull_latest()
     m.push_new()
+    m.push_all()

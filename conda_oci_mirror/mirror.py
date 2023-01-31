@@ -87,7 +87,7 @@ class Mirror:
     @decorators.require_registry
     def update(self, dry_run=False):
         """
-        Update from a conda mirror - akin to a pull and a push.
+        Update from a conda mirror (do a mirror) akin to a pull and a push.
         """
         util.print_item("To: ", self.registry)
 
@@ -205,9 +205,23 @@ class Mirror:
         return runner.run()
 
     @decorators.require_registry
-    def push_new(self, dry_run=False):
+    def push_all(self, dry_run=False, serial=False):
+        """
+        Push all packages to the remote.
+        """
+        return self.push(dry_run, push_all=True, serial=serial)
+
+    @decorators.require_registry
+    def push_new(self, dry_run=False, serial=False):
         """
         Push new packages to the remote.
+        """
+        return self.push(dry_run, push_all=False, serial=serial)
+
+    @decorators.require_registry
+    def push(self, dry_run=False, push_all=False, serial=False):
+        """
+        Push packages to the remote.
         """
         util.print_item("From: ", self.cache_dir)
         util.print_item("  To: ", self.registry)
@@ -242,10 +256,13 @@ class Mirror:
             new_packages = []
             for ext in repository.package_extensions:
                 files = list(pathlib.Path(cache_dir).rglob(f"*.{ext}"))
-                new_packages += [
-                    f for f in files if f.name not in repodata.package_archives
-                ]
-            logger.info(f"Found {len(new_packages)} new packages")
+                if push_all:
+                    new_packages += files
+                else:
+                    new_packages += [
+                        f for f in files if f.name not in repodata.package_archives
+                    ]
+            logger.info(f"Found {len(new_packages)} packages")
 
             # Push with an updated timestamp
             timestamp = datetime.datetime.now().strftime("%Y.%m.%d.%H%M%S")
@@ -264,11 +281,14 @@ class Mirror:
                 runner.add_task(tasks.PackageUploadTask(task, dry_run=dry_run))
 
             # Run tasks for this runner
-            pushes += runner.run()
+            if serial:
+                pushes += runner.run_serial()
+            else:
+                pushes += runner.run()
 
             # If we cleanup, remove repodata.json and replace back with original
             os.remove(orig_repodata)
             if os.path.exists(backup_repodata):
                 shutil.move(backup_repodata, orig_repodata)
 
-        return list(set(pushes))
+        return pushes
