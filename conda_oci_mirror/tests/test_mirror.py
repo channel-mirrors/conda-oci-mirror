@@ -10,7 +10,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.dirname(os.path.dirname(here))
 sys.path.insert(0, root)
 
-from helpers import get_mirror, get_tags  # noqa
+from helpers import check_media_type, get_mirror, get_tags  # noqa
 
 import conda_oci_mirror.repo as repository  # noqa
 from conda_oci_mirror.logger import setup_logger  # noqa
@@ -23,13 +23,18 @@ setup_logger(debug=True, quiet=False)
 
 
 @pytest.mark.parametrize(
-    "subdir,package,ext",
+    "subdir,num_updates,package_name",
     [
-        ("noarch", "redo", "bz2"),
-        ("noarch", "zope.event", "conda"),
+        ("linux-64", 5, "xtensor"),
+        ("osx-64", 6, "xtensor"),
+        ("osx-arm64", 5, "xtensor"),
+        ("win-64", 2, "xtensor"),
+        ("linux-aarch64", 2, "xtensor"),
+        ("linux-ppc64le", 2, "xtensor"),
+        ("noarch", 6, "redo"),
     ],
 )
-def test_mirror(tmp_path, subdir, package, ext):
+def test_mirror(tmp_path, subdir, num_updates, package_name):
     """
     Test creation of a mirror
 
@@ -39,8 +44,32 @@ def test_mirror(tmp_path, subdir, package, ext):
     and checking file structure and/or size.
     """
     cache_dir = os.path.join(tmp_path, "cache")
-    m = get_mirror(subdir, cache_dir, package=package)
-    assert len(m.update()) >= 2
+    m = get_mirror(cache_dir, subdir=subdir)
+    cache_subdir = os.path.join(cache_dir, m.channel, m.subdirs[0])
+
+    assert not os.path.exists(cache_subdir)
+    updates = m.update(serial=True)
+    print(subdir)
+    print(len(updates))
+    assert len(updates) == num_updates
+
+    # Sanity check structure of layers
+    for update in updates:
+        for key in "uri", "layers":
+            assert key in update
+        for layer in update["layers"]:
+            for key in ["path", "title", "media_type", "annotations"]:
+                assert key in layer
+            # The title should be the file basename
+            assert layer["path"].endswith(layer["title"])
+
+            check_media_type(layer)
+
+            # The annotation is needed for the path
+            assert "org.opencontainers.image.title" in layer["annotations"]
+            assert (
+                layer["annotations"]["org.opencontainers.image.title"] == layer["title"]
+            )
 
     # Each subdir should have a directory in the cache with repodata
     # and nothing else
@@ -51,11 +80,12 @@ def test_mirror(tmp_path, subdir, package, ext):
     repodata_file = os.path.join(cache_subdir, "repodata.json")
     repodata = repository.RepoData(repodata_file)
 
+    # The repodata is len(packages) + 2 (latest and tag for repodata.json)
+    assert len(list(repodata.packages)) + 2 == num_updates
+
     # Smallest size is osx-arm64
     for key in ["packages", "packages.conda"]:
         assert key in repodata.data
-        # packages has over 40000, conda has > 70000
-        assert len(repodata.data[key]) >= 7000
 
     # We can use oras to get artifacts we should have pushed
     # We should be able to pull the latest tag
@@ -75,20 +105,23 @@ def test_mirror(tmp_path, subdir, package, ext):
     os.stat(result[0]).st_size == os.stat(repodata_file).st_size
     package_names = repodata.package_names
 
-    # Looks like only noarch has redo
-    if subdir != "noarch":
-        assert m.packages[0] not in package_names
+    # Testing mirror has xtensor, except if only 2
+    if num_updates == 2:
+        assert not package_names
         return
-    assert m.packages[0] in package_names
 
-    expected_repo = f"{m.registry}/{m.channel}/{subdir}/{m.packages[0]}"
+    print(package_names)
+    assert package_name in package_names
+
+    expected_repo = f"{m.registry}/{m.channel}/{subdir}/{package_name}"
     tags = get_tags(expected_repo)
     assert len(tags["tags"]) >= 1
 
     # Get the latest tag - should be newer at end (e.g., conda)
     tag = tags["tags"][-1]
     pull_dir = os.path.join(tmp_path, "package")
-    result = oras.pull(target=f"{expected_repo}:{tag}", outdir=pull_dir)
+    uri = f"{expected_repo}:{tag}"
+    result = oras.pull(target=uri, outdir=pull_dir)
     assert result
 
     # This directory has .bz2 or conda and subdirectory
@@ -102,6 +135,3 @@ def test_mirror(tmp_path, subdir, package, ext):
             assert "info.tar.gz" in os.listdir(fullpath)
             fullpath = os.path.join(pull_dir, result, "info")
             assert "index.json" in os.listdir(fullpath)
-            continue
-
-        assert fullpath.endswith(ext)

@@ -52,8 +52,7 @@ class Mirror:
     ):
         self.channel = channel
         self.subdirs = subdirs or defaults.DEFAULT_SUBDIRS
-        self.packages = packages
-
+        self.packages = packages or []
         # TODO consider placing packages on level of functions
         # We should not need to specify them on init.
 
@@ -85,7 +84,7 @@ class Mirror:
         util.print_item("  Packages:", "all" if not self.packages else self.packages)
 
     @decorators.require_registry
-    def update(self, dry_run=False):
+    def update(self, dry_run=False, serial=False):
         """
         Update from a conda mirror (do a mirror) akin to a pull and a push.
         """
@@ -129,6 +128,8 @@ class Mirror:
             )
 
         # Once we get here, run all tasks, this returns all the items
+        if serial:
+            return runner.run_serial()
         return runner.run()
 
     def iter_subdirs(self):

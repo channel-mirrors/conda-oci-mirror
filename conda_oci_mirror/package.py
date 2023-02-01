@@ -43,7 +43,7 @@ def check_checksum(path, package_dict):
         return True
 
 
-@retry(attempts=3, timeout=2)
+@retry(attempts=5, timeout=2)
 def download_file(url, dest, checksum_content=None, chunk_size=8192):
     """
     Stream download a file!

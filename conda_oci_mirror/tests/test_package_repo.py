@@ -4,8 +4,6 @@ import os
 import sys
 import tarfile
 
-import pytest
-
 # The setup.cfg doesn't install the main module proper
 here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.dirname(os.path.dirname(here))
@@ -23,15 +21,7 @@ from conda_oci_mirror.repo import PackageRepo  # noqa
 setup_logger(debug=True, quiet=False)
 
 
-# Linux 64 for zlib has a lot of versions
-@pytest.mark.parametrize(
-    "subdir,pkg,ext",
-    [
-        ("linux-64", "zlib", "tar.bz2"),
-        ("noarch", "zope.event", "conda"),
-    ],
-)
-def test_package_repo(tmp_path, subdir, pkg, ext):
+def test_package_repo(tmp_path):
     """
     Test package repo
 
@@ -43,61 +33,67 @@ def test_package_repo(tmp_path, subdir, pkg, ext):
     cache_dir = os.path.join(tmp_path, "cache")
 
     # Do a quick mirror so we have the package to get in a remote!
-    m = get_mirror(subdir, cache_dir, package=pkg)
+    m = get_mirror(cache_dir)
 
     # There is no latest tag, so we need to get tags from here
-    res = m.update()
+    res = m.update(serial=True)
+    assert len(res) >= 25
 
     # Get a package URI (last one should be latest)
     # Note that if you run this test twice on the same registry
     # since the packages are already mirrored you'll get an empty list
-    package = [x for x in res if pkg in x["uri"]][-1]
-    assert package
+    for result in res:
+        if "repodata" in result["uri"]:
+            continue
+        print(result["uri"])
+        package_name = result["uri"].rsplit("/", 1)[-1]
+        subdir = result["uri"].split("/")[-2]
 
-    # 'zlib:1.2.11-0' or zope..etc
-    package_name = package["uri"].rsplit("/", 1)[-1]
+        # Our package remote is "dinosaur" and not "conda-forge"
+        repo = PackageRepo(
+            m.channel, subdir=subdir, cache_dir=cache_dir, registry=m.registry
+        )
 
-    # Our package remote is "dinosaur" and not "conda-forge"
-    repo = PackageRepo(m.channel, subdir, cache_dir, registry=m.registry)
+        # Should retrieve from
+        # http://127.0.0.1:5000/dinosaur/conda-forge/linux-64/zlib:1.2.11-0'
+        index_json = repo.get_index_json(package_name)
 
-    # Should retrieve from
-    # http://127.0.0.1:5000/dinosaur/conda-forge/linux-64/zlib:1.2.11-0'
-    index_json = repo.get_index_json(package_name)
+        # Assert this is an index json!
+        for required in [
+            "arch",
+            "build",
+            "build_number",
+            "depends",
+            "license",
+            "name",
+            "platform",
+            "subdir",
+            "version",
+        ]:
+            assert required in index_json
 
-    # Assert this is an index json!
-    for required in [
-        "arch",
-        "build",
-        "build_number",
-        "depends",
-        "license",
-        "name",
-        "platform",
-        "subdir",
-        "version",
-    ]:
-        assert required in index_json
+        # Now get the info, this is an opened tarfile
+        info = repo.get_info(package_name)
+        assert isinstance(info, tarfile.TarFile)
+        members = list(info)
 
-    # Now get the info, this is an opened tarfile
-    info = repo.get_info(package_name)
-    assert isinstance(info, tarfile.TarFile)
-    members = list(info)
+        # These are the names we expect to see (shared between formats)
+        should_find = {
+            "files",
+            "index.json",
+            "recipe",
+        }
+        for member in members:
+            print(f"Found zlib info member {member.name}")
+            if member.name in should_find:
+                should_find.remove(member.name)
 
-    # These are the names we expect to see (shared between formats)
-    should_find = {
-        "files",
-        "index.json",
-        "recipe",
-    }
-    for member in members:
-        print(f"Found zlib info member {member.name}")
-        if member.name in should_find:
-            should_find.remove(member.name)
+        if should_find:
+            raise ValueError(f"Expected to find {should_find} in info, but did not.")
 
-    if should_find:
-        raise ValueError(f"Expected to find {should_find} in info, but did not.")
+        # Get package will look first for the conda media type, then old format bz2
+        pkg = repo.get_package(package_name)
 
-    # Get package will look first for the conda media type, then old format bz2
-    pkg = repo.get_package(package_name)
-    assert pkg.endswith(ext)
-    assert os.path.exists(pkg)
+        # Find the layer with the media type
+        layer = [x for x in result["layers"] if "conda.package" in x["media_type"]][0]
+        assert os.path.basename(layer["path"]) == os.path.basename(pkg)

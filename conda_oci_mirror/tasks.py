@@ -24,7 +24,8 @@ class TaskBase:
         with last_upload_time.get_lock():
             lt = last_upload_time.value
             now = time.time()
-            rt = 0.5
+            # Slighly slower than the original 0.5 rate limit
+            rt = 0.7
             if now - lt < rt:
                 print(f"Rate limit sleep for {(lt + rt) - now}")
                 time.sleep((lt + rt) - now)

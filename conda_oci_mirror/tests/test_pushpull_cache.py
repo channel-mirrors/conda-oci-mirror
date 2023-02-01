@@ -35,11 +35,16 @@ def test_push_pull_cache(tmp_path, subdir):
     """
     # Start with a mirror
     cache_dir = os.path.join(tmp_path, "cache")
-    m = get_mirror(subdir, cache_dir)
+    m = get_mirror(cache_dir, subdir=subdir)
     updates = m.update()
-    assert len(updates) >= 2
+    assert len(updates) >= 6
 
     # Now we can use the mirror to push and pull from the cache
-    m.pull_latest()
-    m.push_new()
-    m.push_all()
+    latest = m.pull_latest()
+    assert len(latest) >= 2
+
+    # Should not be any new if we just mirrored
+    new_packages = m.push_new()
+    assert not new_packages
+    all_packages = m.push_all()
+    assert len(all_packages) >= 2

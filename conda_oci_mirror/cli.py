@@ -15,9 +15,6 @@ def main():
     pass
 
 
-# If the user is calling the client, set the cache to PWD
-default_cache_dir = os.getcwd()
-
 options = [
     click.option("-s", "--subdir", default=defaults.DEFAULT_SUBDIRS, multiple=True),
     click.option("-p", "--package", help="Select packages", default=[], multiple=True),
@@ -57,7 +54,7 @@ def mirror(channel, subdir, registry, package, cache_dir, dry_run, quiet, debug)
         subdirs=subdir,
         packages=package,
         registry=registry,
-        cache_dir=cache_dir or default_cache_dir,
+        cache_dir=cache_dir,
     )
     m.update(dry_run)
 
@@ -77,7 +74,7 @@ def pull_cache(channel, subdir, registry, package, cache_dir, dry_run, quiet, de
         subdirs=subdir,
         packages=package,
         registry=registry,
-        cache_dir=cache_dir or default_cache_dir,
+        cache_dir=cache_dir,
     )
     m.pull_latest(dry_run)
 
@@ -100,7 +97,7 @@ def push_cache(
         subdirs=subdir,
         packages=package,
         registry=registry,
-        cache_dir=cache_dir or default_cache_dir,
+        cache_dir=cache_dir,
     )
     if push_all:
         m.push_all(dry_run)
