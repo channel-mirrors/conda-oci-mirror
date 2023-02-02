@@ -31,7 +31,6 @@ class RepoData:
     """
 
     def __init__(self, filename=None, package_types=None):
-
         self.filename = filename
 
         # Control access to package types
@@ -164,6 +163,13 @@ class PackageRepo:
         return os.path.join(self.cache_dir, "repodata.json")
 
     @property
+    def patches(self):
+        """
+        Repository metadata plus packages yanked.
+        """
+        return os.path.join(self.cache_dir, "repodata_from_packages.json")
+
+    @property
     def name(self):
         return os.path.join(self.channel, self.subdir)
 
@@ -231,37 +237,49 @@ class PackageRepo:
         """
         self.timestamp = datetime.datetime.now()
 
-    def get_repodata(self):
+    def ensure_repodata(self):
         """
-        Get respository metadata
+        Ensure respository metadata is freshly downloaded.
         """
         util.mkdir_p(os.path.dirname(self.repodata))
+        logger.info(f"Downloading patches for {self.channel}/{self.subdir}")
+
+        # The repodata is "patched" by this file: repodata_from_packages.json
+        patches = requests.get(
+            f"https://conda.anaconda.org/{self.channel}/{self.subdir}/repodata_from_packages.json",
+            allow_redirects=True,
+        )
         logger.info(f"Downloading fresh repodata for {self.channel}/{self.subdir}")
-        r = requests.get(
+        repodata = requests.get(
             f"https://conda.anaconda.org/{self.channel}/{self.subdir}/repodata.json",
             allow_redirects=True,
         )
-        util.write_file(r.text, self.repodata)
+
+        # If we retrieve both succesfully, save both for later use
+        if patches.status_code == 200:
+            util.write_file(patches.text, self.patches)
+        if repodata.status_code == 200:
+            util.write_file(repodata.text, self.repodata)
         self.ensure_timestamp()
-        return self.repodata
 
     def upload(self, root, registry=None):
         """
         Push the repodata.json to a named registry from root context.
         """
         registry = registry or self.registry
-        repodata = self.get_repodata()
+        self.ensure_repodata()
         pushes = []
 
         # title is used for archive name (path extracted to) so relative to root
-        title = os.path.relpath(repodata, root)
+        # note that we upload repodata.json here, not the one with yanked packages
+        title = os.path.relpath(self.repodata, root)
 
         # Push should be relative to cache context
         uri = f"{registry}/{self.channel}/{self.subdir}/repodata.json"
 
         # Don't be pushy now, or actually, do :)
         pusher = Pusher(root, self.timestamp)
-        pusher.add_layer(repodata, defaults.repodata_media_type_v1, title)
+        pusher.add_layer(self.repodata, defaults.repodata_media_type_v1, title)
 
         # Push for a tag for the date, and latest
         for tag in pusher.created_at, "latest":
@@ -271,27 +289,32 @@ class PackageRepo:
         # Return pushes
         return pushes
 
-    def load_repodata(self):
+    def load_repodata(self, include_yanked=True):
         """
         Load repository data (json)
 
         We always retrieve it fresh.
         """
-        self.get_repodata()
+        self.ensure_repodata()
+        if include_yanked and not os.path.exists(self.patches):
+            logger.warning(
+                "Repodata from packages (with yanked packages) does not exist, falling back to repodata.json"
+            )
+        elif include_yanked:
+            return RepoData(self.patches)
         return RepoData(self.repodata)
 
-    def find_packages(self, names=None, skips=None, registry=None):
+    def find_packages(self, names=None, skips=None, registry=None, include_yanked=True):
         """
         Given loaded repository data, find packages of interest
         """
         registry = registry or self.registry
         skips = skips or []
-        repodata = self.load_repodata()
+        repodata = self.load_repodata(include_yanked)
 
         # Look through package info for conda and regular packages
         # These don't overlap, version wise, so it's safe to do.
         for pkg, info in repodata.packages:
-
             # Case 1: we are given packages to filter to
             if names:
                 if not any(fnmatch.fnmatch(info["name"], x) for x in names):

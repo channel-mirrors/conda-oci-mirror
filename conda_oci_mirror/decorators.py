@@ -77,7 +77,6 @@ class require_registry(Decorator):
         return partial(self.__call__, obj)
 
     def __call__(self, cls, *args, **kwargs):
-
         if not hasattr(cls, "registry") or not cls.registry:
             raise ValueError('A "registry" is required on the class for this function.')
         return self.func(cls, *args, **kwargs)

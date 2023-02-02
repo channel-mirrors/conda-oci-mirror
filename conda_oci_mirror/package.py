@@ -184,7 +184,6 @@ class Package:
             extra_tags = set([extra_tags])
 
         with tempfile.TemporaryDirectory() as staging_dir:
-
             pusher = Pusher(staging_dir, timestamp=timestamp)
             upload_files_path = pathlib.Path(staging_dir)
             shutil.copy(self.file, staging_dir)

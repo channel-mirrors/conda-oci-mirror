@@ -31,6 +31,15 @@ def write_file(text, filename):
         fo.write(text)
 
 
+def write_json(obj, filename):
+    """
+    Write json to filename.
+    """
+    with open(filename, "w") as fd:
+        fd.write(json.dumps(obj, indent=4))
+    return filename
+
+
 def read_json(filename):
     """
     Read json file into dict/list etc.

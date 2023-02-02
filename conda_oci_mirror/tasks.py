@@ -175,7 +175,6 @@ class TaskRunner:
         items = []
         with mp.Pool(processes=self.workers) as pool:
             for result in pool.map(run_task, self.tasks):
-
                 # This is a smaller list of packages/repo metadata pushes
                 if isinstance(result, list):
                     items += result

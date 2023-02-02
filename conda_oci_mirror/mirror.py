@@ -84,7 +84,7 @@ class Mirror:
         util.print_item("  Packages:", "all" if not self.packages else self.packages)
 
     @decorators.require_registry
-    def update(self, dry_run=False, serial=False):
+    def update(self, dry_run=False, serial=False, include_yanked=True):
         """
         Update from a conda mirror (do a mirror) akin to a pull and a push.
         """
@@ -105,9 +105,11 @@ class Mirror:
             )
 
             # Run filter based on packages we are looking for, and forbidden
-            # This includes packages and packages.conda
-            for package, info in repo.find_packages(self.packages, self.skip_packages):
-
+            # This includes packages and packages.conda. If include yanked is true,
+            # this means we use repodata_from_packages.json that includes removed.
+            for package, info in repo.find_packages(
+                self.packages, self.skip_packages, include_yanked=include_yanked
+            ):
                 # Add the new tasks to be run by the runner
                 # This will get mapped into a Package instance to interact with
                 task = pkg.Package(
@@ -141,7 +143,7 @@ class Mirror:
             yield subdir, cache_dir
 
     @decorators.require_registry
-    def pull_latest(self, dry_run=False):
+    def pull_latest(self, dry_run=False, serial=False):
         """
         Pull latest packages from a location (the GitHub user) to a local cache.
         """
@@ -152,7 +154,6 @@ class Mirror:
         runner = tasks.TaskRunner()
 
         for subdir, cache_dir in self.iter_subdirs():
-
             # Note that the original channel is relevant for a mirror
             uri = f"{self.registry}/{self.channel}/{subdir}/repodata.json:latest"
 
@@ -175,7 +176,6 @@ class Mirror:
             # Don't repeat requests for same uri and media type
             seen = set()
             for package_file, info in repodata.packages:
-
                 # The package name
                 package = info["name"]
 
@@ -203,6 +203,8 @@ class Mirror:
                 # Not every package is guaranteed to exist
                 runner.add_task(tasks.DownloadTask(uri, cache_dir, media_type))
 
+        if serial:
+            return runner.run_serial()
         return runner.run()
 
     @decorators.require_registry
@@ -229,7 +231,6 @@ class Mirror:
         pushes = []
 
         for subdir, cache_dir in self.iter_subdirs():
-
             # Create a new task runner per subdir
             # The reason is that we cleanup between them
             runner = tasks.TaskRunner()

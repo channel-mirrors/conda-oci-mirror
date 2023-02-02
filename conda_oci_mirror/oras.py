@@ -118,7 +118,6 @@ class Registry(oras.provider.Registry):
         # Find the layer of interest! Currently we look for presence of the string
         # e.g., "prices" can come from "prices" or "prices-web"
         for layer in manifest.get("layers", []):
-
             # E.g., google.prices or google.prices-web or aws.prices
             if media_type and layer["mediaType"] != media_type:
                 continue
@@ -157,7 +156,6 @@ class Registry(oras.provider.Registry):
 
         # Upload files as blobs
         for item in archives:
-
             blob = item.get("path")
             media_type = item.get("media_type")
             annots = item.get("annotations") or {}
