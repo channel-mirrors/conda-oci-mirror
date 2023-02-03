@@ -53,6 +53,8 @@ class Mirror:
         self.channel = channel
         self.subdirs = subdirs or defaults.DEFAULT_SUBDIRS
         self.packages = packages or []
+        if "all" in self.packages:
+            self.packages = []
         # TODO consider placing packages on level of functions
         # We should not need to specify them on init.
 
