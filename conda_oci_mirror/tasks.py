@@ -128,7 +128,7 @@ class TaskRunner:
     A task runner knows how to time and run tasks!
     """
 
-    def __init__(self, workers=4):
+    def __init__(self, workers=1):
         self.workers = workers
         self.tasks = []
 
