@@ -1,19 +1,13 @@
-import pathlib
+import os
 
 import click
 
-from conda_oci_mirror.cache_packages import pull_latest_packages, push_new_packages
-from conda_oci_mirror.oci_mirror import mirror as _mirror
+import conda_oci_mirror.defaults as defaults
+from conda_oci_mirror.logger import setup_logger
+from conda_oci_mirror.mirror import Mirror
 
-DEFAULT_SUBDIRS = [
-    "linux-64",
-    "osx-64",
-    "osx-arm64",
-    "win-64",
-    "linux-aarch64",
-    "linux-ppc64le",
-    "noarch",
-]
+# The cache defaults to the present working directory
+default_cache = os.path.join(os.getcwd(), "cache")
 
 
 @click.group()
@@ -21,68 +15,91 @@ def main():
     pass
 
 
+options = [
+    click.option("-s", "--subdir", default=defaults.DEFAULT_SUBDIRS, multiple=True),
+    click.option("-p", "--package", help="Select packages", default=[], multiple=True),
+    click.option(
+        "--registry", default=None, help="Registry URI (e.g., ghcr.io/username)"
+    ),
+    click.option("--dry-run/--no-dry-run", default=False, help="Dry run?"),
+    click.option("--cache-dir", default=default_cache, help="Path to cache directory"),
+    click.option("-c", "--channel", help="Select channel", default="conda-forge"),
+    click.option("--quiet", default=False, help="Do not print verbose output?"),
+    click.option("--debug", default=False, help="Print debug output?"),
+]
+
+
+def add_options(options):
+    """
+    Function to return click options (all shared between commands)
+    """
+
+    def _add_options(func):
+        for option in reversed(options):
+            func = option(func)
+        return func
+
+    return _add_options
+
+
 @main.command()
-@click.option("-c", "--channel", help="Select channel")
-@click.option("-s", "--subdirs", default=DEFAULT_SUBDIRS, multiple=True)
-@click.option(
-    "-p", "--packages", help="Select packages for mirroring", default=[], multiple=True
-)
-@click.option("--user", default=None, help="Username for ghcr.io")
-@click.option("--host", default="ghcr.io", help="Host to push packages to")
-@click.option("--dry-run/--no-dry-run", default=False, help="Dry run?")
-@click.option(
-    "--cache-dir", default=pathlib.Path.cwd() / "cache", help="Path to cache directory"
-)
-def mirror(channel, subdirs, user, packages, host, cache_dir, dry_run):
-    cache_dir = pathlib.Path(cache_dir)
-    print(f"Using cache dir: {cache_dir}")
-    print(f"Mirroring : {channel}")
-    print(f"  Subdirs : {subdirs}")
-    print(f"  Packages: {packages}")
-    print(f"To: {host}/{user}")
-    _mirror(
-        [channel],
-        subdirs,
-        packages,
-        f"user:{user}",
-        host,
+@add_options(options)
+def mirror(channel, subdir, registry, package, cache_dir, dry_run, quiet, debug):
+    setup_logger(
+        quiet=quiet,
+        debug=debug,
+    )
+    m = Mirror(
+        channel=channel,
+        subdirs=subdir,
+        packages=package,
+        registry=registry,
         cache_dir=cache_dir,
-        dry_run=dry_run,
     )
-
-
-def push_pull_options(function):
-    function = click.option("--location", help="Username for ghcr.io")(function)
-    function = click.option("-s", "--subdir")(function)
-    function = click.option(
-        "-p",
-        "--packages",
-        help="Select packages for caching",
-        default=[],
-        multiple=True,
-    )(function)
-    function = click.option(
-        "--host", default="ghcr.io", help="Host to push packages to"
-    )(function)
-    function = click.option(
-        "--cache-dir",
-        default=pathlib.Path.cwd() / "cache",
-        help="Path to cache directory",
-    )(function)
-    function = click.option("--dry-run/--no-dry-run", default=False, help="Dry run?")(
-        function
-    )
-    return function
+    m.update(dry_run)
 
 
 @main.command()
-@push_pull_options
-def pull_cache(location, subdir, packages, host, cache_dir, dry_run):
-    print(subdir)
-    pull_latest_packages(f"{host}/{location}", packages, [subdir], cache_dir)
+@add_options(options)
+def pull_cache(channel, subdir, registry, package, cache_dir, dry_run, quiet, debug):
+    """
+    Pull a remote host/user to a local cache_dir
+    """
+    setup_logger(
+        quiet=quiet,
+        debug=debug,
+    )
+    m = Mirror(
+        channel=channel,
+        subdirs=subdir,
+        packages=package,
+        registry=registry,
+        cache_dir=cache_dir,
+    )
+    m.pull_latest(dry_run)
 
 
 @main.command()
-@push_pull_options
-def push_cache(location, subdir, packages, host, cache_dir, dry_run):
-    push_new_packages(f"{host}/{location}", packages, [subdir], cache_dir)
+@add_options(options)
+@click.option("--push-all", default=False, help="Push all local packages?")
+def push_cache(
+    channel, subdir, registry, package, cache_dir, dry_run, quiet, debug, push_all
+):
+    """
+    Push a local cache in cache_dir to a remote host/user
+    """
+    setup_logger(
+        quiet=quiet,
+        debug=debug,
+    )
+    m = Mirror(
+        channel=channel,
+        subdirs=subdir,
+        packages=package,
+        registry=registry,
+        cache_dir=cache_dir,
+    )
+    if push_all:
+        m.push_all(dry_run)
+    else:
+        m.push_new(dry_run)

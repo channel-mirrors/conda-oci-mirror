@@ -1,27 +1,83 @@
+import errno
 import hashlib
+import json
 import os
+import platform
+import subprocess
+import sys
+import tarfile
 
 
-def get_envvars(envvars):
-    for e in envvars:
-        if os.environ.get(e):
-            return os.environ[e]
-    return None
+def print_item(prefix, item):
+    """
+    Shared function to print an item (prefix) and pretty item.
+    """
+    if isinstance(
+        item,
+        (
+            list,
+            tuple,
+        ),
+    ):
+        item = " ".join(item)
+    print(f"{prefix} {item}")
 
 
-def get_github_auth(user=None):
-    token = get_envvars(["GHA_PAT", "GITHUB_TOKEN"])
-    if token is None:
-        raise RuntimeError(
-            "Need to configure a github token (GHA_PAT or GITHUB_TOKEN environment variables)"
+def write_file(text, filename):
+    """
+    Write some text to a filename
+    """
+    with open(filename, "w") as fo:
+        fo.write(text)
+
+
+def write_json(obj, filename):
+    """
+    Write json to filename.
+    """
+    with open(filename, "w") as fd:
+        fd.write(json.dumps(obj, indent=4))
+    return filename
+
+
+def read_json(filename):
+    """
+    Read json file into dict/list etc.
+    """
+    with open(filename) as fi:
+        content = json.load(fi)
+    return content
+
+
+def mkdir_p(path):
+    """
+    Make a directory path if it does not exist, akin to mkdir -p
+    """
+    try:
+        os.makedirs(path)
+    except OSError as e:
+        if e.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            sys.exit(f"Error creating path {path}, exiting.")
+
+
+def compress_folder(source_dir, output_filename):
+    """
+    Compress a directory to an output destination
+    """
+    if not platform.system() == "Windows":
+        return subprocess.run(
+            f"tar -cvzf {output_filename} *",
+            cwd=source_dir,
+            shell=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
         )
-    user = user or get_envvars(["GHA_USER", "GITHUB_USER"])
-    print("User: ", user, " with token: ", (token is not None))
-
-    if user and token:
-        return (user, token)
-
-    return None
+    else:
+        with tarfile.open(output_filename, "w:gz") as tar:
+            tar.add(source_dir, arcname=".")
 
 
 def sha256sum(path):
