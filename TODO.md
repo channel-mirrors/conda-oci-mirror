@@ -2,10 +2,6 @@
 
 ### High Priority
 
-#### Support the new .conda package format.
-
-> We do not yet support the "new" .conda package format in the OCI mirroring tools. Luckily the new conda-package-handling (and conda-package-streaming) packages are pretty OK and we can use them to do what we need: https://conda.github.io/conda-package-handling/api.html instead of using `tarfile`. The new package format files appear under the `packages.conda` key in the repodata.json file.
-
 #### Deep and Shallow Modes
 
 > currently we're checking against all tags on the ghcr registry which is a bit slow. We could have a "deep" and a "shallow" mode (where in the shallow mode it would use the "latest uploaded repodata" as reference from here: https://github.com/orgs/channel-mirrors/packages/container/package/conda-forge%2Fnoarch%2Frepodata.json
