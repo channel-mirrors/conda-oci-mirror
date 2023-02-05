@@ -1,6 +1,9 @@
 import os
 import sys
 
+import pytest
+from xprocess import ProcessStarter
+
 from conda_oci_mirror.oras import oras  # noqa
 
 # The setup.cfg doesn't install the main module proper
@@ -56,11 +59,13 @@ def delete_tags(registry, channel, subdir, name):
     tags = f"{registry_url()}/{test_user()}/{channel}/{subdir}/{name}"
     try:
         tags = oras.get_tags(tags)
+        print(f"Got tags to delete {tags}")
     except Exception:
         return
 
     for tag in tags:
         # get digest of manifest
+        print(f"Deleting tag {tag} for {name}")
         manifest_url = f"{registry_url()}/v2/{test_user()}/{channel}/{subdir}/{name}/manifests/{tag}"
         response = oras.do_request(
             manifest_url,
@@ -78,17 +83,58 @@ def delete_tags(registry, channel, subdir, name):
             raise RuntimeError("Failed to delete tag")
 
 
-def get_mirror(cache_dir, subdir=None, package=None, channel=None):
+@pytest.fixture
+def oci_registry(xprocess):
+    class Starter(ProcessStarter):
+        # startup pattern
+        pattern = r".*listening on \[::\]:5000.*"
+
+        # command to start process
+        args = [
+            "docker",
+            "run",
+            "--rm",
+            "-p",
+            "5010:5000",
+            "-e",
+            "REGISTRY_STORAGE_DELETE_ENABLED=true",
+            "registry:2",
+        ]
+
+    # ensure process is running and return its logfile
+    logfile = xprocess.ensure("oci_registry", Starter)
+
+    conn = "http://localhost:5010"
+    yield conn
+
+    # clean up whole process tree afterwards
+    xprocess.getinfo("oci_registry").terminate()
+
+
+@pytest.fixture
+def subdir():
+    return None
+
+
+@pytest.fixture
+def cache_dir(tmp_path):
+    return tmp_path
+
+
+@pytest.fixture
+def mirror_instance(subdir, oci_registry, cache_dir):
     """
     Shared function to get a mirror for a particular subdir.
     """
-
+    package = None
+    channel = None
+    print("Creating mirror with subdir", subdir, oci_registry)
     # Noarch is the only place redo exists
     channel = channel or "mirror-testing"
 
     # Interacting with a package repo means we interact with the
     # registry directly, the host + namespace.
-    registry = f"{registry_url()}/{test_user()}"
+    registry = f"{oci_registry}/{test_user()}"
 
     return Mirror(
         channel=channel,

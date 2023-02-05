@@ -4,7 +4,7 @@ import os
 import sys
 
 import pytest
-from helpers import delete_tags
+from conftest import delete_tags  # noqa
 
 # The setup.cfg doesn't install the main module proper
 here = os.path.dirname(os.path.abspath(__file__))
@@ -12,20 +12,19 @@ root = os.path.dirname(os.path.dirname(here))
 sys.path.insert(0, root)
 sys.path.insert(0, here)
 
-# import conda_oci_mirror.defaults as defaults
-from helpers import get_mirror  # noqa
-
 from conda_oci_mirror.logger import setup_logger  # noqa
 
 # Ensure we see all verbosity
 setup_logger(debug=True, quiet=False)
 
 
-@pytest.mark.parametrize(
-    "subdir",
-    ["noarch"],
-)
-def test_push_pull_cache(tmp_path, subdir):
+# override the subdir that is used in the tests
+@pytest.fixture
+def subdir():
+    return "noarch"
+
+
+def test_push_pull_cache(mirror_instance):
     """
     Test push and pull of the cache.
 
@@ -36,12 +35,7 @@ def test_push_pull_cache(tmp_path, subdir):
     """
 
     # Start with a mirror
-    cache_dir = os.path.join(tmp_path, "cache")
-    m = get_mirror(cache_dir, subdir=subdir)
-
-    # tags = f"{m.registry}/{m.channel}/{subdir}/intake-axds"
-    delete_tags(m.registry, m.channel, subdir, "intake-axds")
-    delete_tags(m.registry, m.channel, subdir, "redo")
+    m = mirror_instance
 
     updates = m.update(serial=True)
     assert len(updates) >= 6

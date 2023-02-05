@@ -10,8 +10,6 @@ root = os.path.dirname(os.path.dirname(here))
 sys.path.insert(0, root)
 sys.path.insert(0, here)
 
-from helpers import get_mirror  # noqa
-
 from conda_oci_mirror.logger import setup_logger  # noqa
 
 # import conda_oci_mirror.defaults as defaults
@@ -21,7 +19,7 @@ from conda_oci_mirror.repo import PackageRepo  # noqa
 setup_logger(debug=True, quiet=False)
 
 
-def test_package_repo(tmp_path):
+def test_package_repo(mirror_instance):
     """
     Test package repo
 
@@ -30,10 +28,8 @@ def test_package_repo(tmp_path):
     with a remote. We use zlib with linux-64 since it has a lot
     of versions.
     """
-    cache_dir = os.path.join(tmp_path, "cache")
-
     # Do a quick mirror so we have the package to get in a remote!
-    m = get_mirror(cache_dir)
+    m = mirror_instance
 
     # There is no latest tag, so we need to get tags from here
     res = m.update(serial=True)
@@ -52,7 +48,7 @@ def test_package_repo(tmp_path):
 
         # Our package remote is "dinosaur" and not "conda-forge"
         repo = PackageRepo(
-            m.channel, subdir=subdir, cache_dir=cache_dir, registry=m.registry
+            m.channel, subdir=subdir, cache_dir=m.cache_dir, registry=m.registry
         )
 
         # Should retrieve from

@@ -10,7 +10,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.dirname(os.path.dirname(here))
 sys.path.insert(0, root)
 
-from helpers import check_media_type, get_mirror  # noqa
+from conftest import check_media_type  # noqa
 
 import conda_oci_mirror.repo as repository  # noqa
 from conda_oci_mirror.logger import setup_logger  # noqa
@@ -34,7 +34,7 @@ setup_logger(debug=True, quiet=False)
         ("noarch", 6, "redo"),
     ],
 )
-def test_mirror(tmp_path, subdir, num_updates, package_name):
+def test_mirror(subdir, num_updates, package_name, mirror_instance):
     """
     Test creation of a mirror
 
@@ -43,8 +43,9 @@ def test_mirror(tmp_path, subdir, num_updates, package_name):
     the package files. We verify by pull back again with oras,
     and checking file structure and/or size.
     """
-    cache_dir = os.path.join(tmp_path, "cache")
-    m = get_mirror(cache_dir, subdir=subdir)
+    m = mirror_instance
+    assert m.subdirs == [subdir]
+    cache_dir = m.cache_dir
     cache_subdir = os.path.join(cache_dir, m.channel, m.subdirs[0])
 
     assert not os.path.exists(cache_subdir)
@@ -96,7 +97,7 @@ def test_mirror(tmp_path, subdir, num_updates, package_name):
     assert "latest" in tags
     assert len(tags) >= 2
 
-    pull_dir = os.path.join(tmp_path, "pulls")
+    pull_dir = os.path.join(cache_dir, "pulls")
     result = oras.pull(target=expected_latest, outdir=pull_dir)
     assert result
     assert os.path.exists(result[0])
@@ -119,7 +120,7 @@ def test_mirror(tmp_path, subdir, num_updates, package_name):
 
     # Get the latest tag - should be newer at end (e.g., conda)
     tag = tags[-1]
-    pull_dir = os.path.join(tmp_path, "package")
+    pull_dir = os.path.join(cache_dir, "package")
     uri = f"{expected_repo}:{tag}"
     result = oras.pull(target=uri, outdir=pull_dir)
     assert result
