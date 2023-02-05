@@ -10,7 +10,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.dirname(os.path.dirname(here))
 sys.path.insert(0, root)
 
-from helpers import check_media_type, get_mirror, get_tags  # noqa
+from helpers import check_media_type, get_mirror  # noqa
 
 import conda_oci_mirror.repo as repository  # noqa
 from conda_oci_mirror.logger import setup_logger  # noqa
@@ -90,11 +90,11 @@ def test_mirror(tmp_path, subdir, num_updates, package_name):
     # We can use oras to get artifacts we should have pushed
     # We should be able to pull the latest tag
     expected_latest = f"{m.registry}/{m.channel}/{subdir}/repodata.json:latest"
-    result = get_tags(expected_latest)
+    tags = oras.get_tags(expected_latest)
 
     # We minimally should have 2, one which is latest
-    assert "latest" in result["tags"]
-    assert len(result["tags"]) >= 2
+    assert "latest" in tags
+    assert len(tags) >= 2
 
     pull_dir = os.path.join(tmp_path, "pulls")
     result = oras.pull(target=expected_latest, outdir=pull_dir)
@@ -114,11 +114,11 @@ def test_mirror(tmp_path, subdir, num_updates, package_name):
     assert package_name in package_names
 
     expected_repo = f"{m.registry}/{m.channel}/{subdir}/{package_name}"
-    tags = get_tags(expected_repo)
-    assert len(tags["tags"]) >= 1
+    tags = oras.get_tags(expected_repo)
+    assert len(tags) >= 1
 
     # Get the latest tag - should be newer at end (e.g., conda)
-    tag = tags["tags"][-1]
+    tag = tags[-1]
     pull_dir = os.path.join(tmp_path, "package")
     uri = f"{expected_repo}:{tag}"
     result = oras.pull(target=uri, outdir=pull_dir)

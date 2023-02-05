@@ -325,11 +325,15 @@ class PackageRepo:
                 continue
 
             # Existing packages for this will depend on the extension
-            existing_packages = self.get_existing_packages(
-                info["name"],
-                registry=registry,
-                package_ext=repodata.get_package_extension(pkg),
-            )
+            try:
+                existing_packages = self.get_existing_packages(
+                    info["name"],
+                    registry=registry,
+                    package_ext=repodata.get_package_extension(pkg),
+                )
+            except (ValueError, TypeError):
+                logger.warning(f"Package not yet in registry ({pkg})")
+                existing_packages = set()
 
             # This check includes extension, so shouldn't be an issue
             if pkg not in existing_packages:

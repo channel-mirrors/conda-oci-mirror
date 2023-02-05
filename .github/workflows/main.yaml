@@ -28,6 +28,8 @@ jobs:
     services:
       registry:
         image: ghcr.io/oras-project/registry:latest
+        env:
+          REGISTRY_STORAGE_DELETE_ENABLED: "true"
         ports:
           - 5000:5000
     steps:
@@ -49,6 +51,8 @@ jobs:
     services:
       registry:
         image: ghcr.io/oras-project/registry:latest
+        env:
+          REGISTRY_STORAGE_DELETE_ENABLED: "true"
         ports:
           - 5000:5000
     strategy:

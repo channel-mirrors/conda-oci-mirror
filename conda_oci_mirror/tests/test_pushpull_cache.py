@@ -4,6 +4,7 @@ import os
 import sys
 
 import pytest
+from helpers import delete_tags
 
 # The setup.cfg doesn't install the main module proper
 here = os.path.dirname(os.path.abspath(__file__))
@@ -33,9 +34,15 @@ def test_push_pull_cache(tmp_path, subdir):
     the package files. We verify by pull back again with oras,
     and checking file structure and/or size.
     """
+
     # Start with a mirror
     cache_dir = os.path.join(tmp_path, "cache")
     m = get_mirror(cache_dir, subdir=subdir)
+
+    # tags = f"{m.registry}/{m.channel}/{subdir}/intake-axds"
+    delete_tags(m.registry, m.channel, subdir, "intake-axds")
+    delete_tags(m.registry, m.channel, subdir, "redo")
+
     updates = m.update(serial=True)
     assert len(updates) >= 6
 
@@ -48,3 +55,7 @@ def test_push_pull_cache(tmp_path, subdir):
     assert not new_packages
     all_packages = m.push_all(serial=True)
     assert len(all_packages) >= 2
+
+    # Another update should only concern repodata
+    updates = m.update(serial=True)
+    assert len(updates) == 2
