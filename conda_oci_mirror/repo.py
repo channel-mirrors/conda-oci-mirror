@@ -333,6 +333,7 @@ class PackageRepo:
 
             # This check includes extension, so shouldn't be an issue
             if pkg not in existing_packages:
+                logger.info(f"Adding {pkg} to queue")
                 yield pkg, info
 
     def get_existing_tags(self, package, registry=None):
@@ -354,7 +355,8 @@ class PackageRepo:
         gh_name = f"{registry}/{self.channel}/{self.subdir}/{package}"
 
         # We likely want this to raise an error if there is one.
-        tags = oras.get_tags(gh_name).json().get("tags", [])
+        tags = oras.get_tags(gh_name, N=100_000_000)
+        logger.info(f"Found {len(tags)} tags for {gh_name}")
         existing_tags_cache[package] = tags
         return tags
 

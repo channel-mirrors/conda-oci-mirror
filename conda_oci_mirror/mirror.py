@@ -60,9 +60,9 @@ class Mirror:
 
         # Default mirrors are here
         self.registry = registry or "ghcr.io/channel-mirrors"
-        if '://' in self.registry:
-            self.registry = self.registry.split('://')[1]
-        self.registry = self.registry.rstrip('/')
+        if "://" in self.registry:
+            self.registry = self.registry.split("://")[1]
+        self.registry = self.registry.rstrip("/")
 
         self.cache_dir = os.path.abspath(cache_dir or defaults.CACHE_DIR)
         self.quiet = quiet
