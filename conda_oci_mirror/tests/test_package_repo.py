@@ -4,19 +4,18 @@ import os
 import sys
 import tarfile
 
+from conda_oci_mirror.logger import setup_logger
+from conda_oci_mirror.repo import PackageRepo
+
+# Ensure we see all verbosity
+setup_logger(debug=True, quiet=False)
+
+
 # The setup.cfg doesn't install the main module proper
 here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.dirname(os.path.dirname(here))
 sys.path.insert(0, root)
 sys.path.insert(0, here)
-
-from conda_oci_mirror.logger import setup_logger  # noqa
-
-# import conda_oci_mirror.defaults as defaults
-from conda_oci_mirror.repo import PackageRepo  # noqa
-
-# Ensure we see all verbosity
-setup_logger(debug=True, quiet=False)
 
 
 def test_package_repo(mirror_instance):

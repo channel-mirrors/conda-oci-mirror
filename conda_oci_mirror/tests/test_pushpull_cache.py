@@ -4,15 +4,14 @@ import os
 import sys
 
 import pytest
-from conftest import delete_tags  # noqa
+
+from conda_oci_mirror.logger import setup_logger
 
 # The setup.cfg doesn't install the main module proper
 here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.dirname(os.path.dirname(here))
 sys.path.insert(0, root)
 sys.path.insert(0, here)
-
-from conda_oci_mirror.logger import setup_logger  # noqa
 
 # Ensure we see all verbosity
 setup_logger(debug=True, quiet=False)
@@ -36,6 +35,7 @@ def test_push_pull_cache(mirror_instance):
 
     # Start with a mirror
     m = mirror_instance
+    assert m.subdirs == ["noarch"]
 
     updates = m.update(serial=True)
     assert len(updates) >= 6

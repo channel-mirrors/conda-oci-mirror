@@ -4,22 +4,20 @@ import os
 import sys
 
 import pytest
+from conftest import check_media_type
+
+import conda_oci_mirror.repo as repository
+from conda_oci_mirror.logger import setup_logger
+from conda_oci_mirror.oras import oras
+
+# Ensure we see all verbosity
+setup_logger(debug=True, quiet=False)
+
 
 # The setup.cfg doesn't install the main module proper
 here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.dirname(os.path.dirname(here))
 sys.path.insert(0, root)
-
-from conftest import check_media_type  # noqa
-
-import conda_oci_mirror.repo as repository  # noqa
-from conda_oci_mirror.logger import setup_logger  # noqa
-
-# import conda_oci_mirror.defaults as defaults
-from conda_oci_mirror.oras import oras  # noqa
-
-# Ensure we see all verbosity
-setup_logger(debug=True, quiet=False)
 
 
 @pytest.mark.parametrize(

@@ -4,18 +4,15 @@ import sys
 import pytest
 from xprocess import ProcessStarter
 
-from conda_oci_mirror.oras import oras  # noqa
+import conda_oci_mirror.defaults as defaults
+from conda_oci_mirror.mirror import Mirror
+from conda_oci_mirror.oras import oras
 
 # The setup.cfg doesn't install the main module proper
 here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.dirname(os.path.dirname(here))
 sys.path.insert(0, root)
 sys.path.insert(0, here)
-
-import conda_oci_mirror.defaults as defaults  # noqa
-
-# import conda_oci_mirror.defaults as defaults
-from conda_oci_mirror.mirror import Mirror  # noqa
 
 
 def check_media_type(layer):
@@ -102,7 +99,7 @@ def oci_registry(xprocess):
         ]
 
     # ensure process is running and return its logfile
-    logfile = xprocess.ensure("oci_registry", Starter)
+    xprocess.ensure("oci_registry", Starter)
 
     conn = "http://localhost:5010"
     yield conn
