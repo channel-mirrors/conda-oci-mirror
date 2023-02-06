@@ -6,7 +6,6 @@ from xprocess import ProcessStarter
 
 import conda_oci_mirror.defaults as defaults
 from conda_oci_mirror.mirror import Mirror
-from conda_oci_mirror.oras import oras
 
 # The setup.cfg doesn't install the main module proper
 here = os.path.dirname(os.path.abspath(__file__))
@@ -47,37 +46,6 @@ def registry_url():
 
 def test_user():
     return "dinosaur"
-
-
-def delete_tags(registry, channel, subdir, name):
-    """
-    Delete all tags for a repo
-    """
-    tags = f"{registry_url()}/{test_user()}/{channel}/{subdir}/{name}"
-    try:
-        tags = oras.get_tags(tags)
-        print(f"Got tags to delete {tags}")
-    except Exception:
-        return
-
-    for tag in tags:
-        # get digest of manifest
-        print(f"Deleting tag {tag} for {name}")
-        manifest_url = f"{registry_url()}/v2/{test_user()}/{channel}/{subdir}/{name}/manifests/{tag}"
-        response = oras.do_request(
-            manifest_url,
-            "HEAD",
-            headers={"Accept": "application/vnd.oci.image.manifest.v1+json"},
-        )
-        digest = response.headers.get("Docker-Content-Digest")
-        delete_url = (
-            f"{registry_url()}/v2/dinosaur/{channel}/{subdir}/{name}/manifests/{digest}"
-        )
-        response = oras.do_request(delete_url, "DELETE")
-
-        if response.status_code != 202:
-            print(response.text)
-            raise RuntimeError("Failed to delete tag")
 
 
 @pytest.fixture
