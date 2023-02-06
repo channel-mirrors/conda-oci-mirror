@@ -1,17 +1,17 @@
 import os
 import sys
 
+import pytest
+from xprocess import ProcessStarter
+
+import conda_oci_mirror.defaults as defaults
+from conda_oci_mirror.mirror import Mirror
+
 # The setup.cfg doesn't install the main module proper
 here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.dirname(os.path.dirname(here))
 sys.path.insert(0, root)
 sys.path.insert(0, here)
-
-import conda_oci_mirror.defaults as defaults  # noqa
-
-# import conda_oci_mirror.defaults as defaults
-from conda_oci_mirror.mirror import Mirror  # noqa
-from conda_oci_mirror.oras import oras  # noqa
 
 
 def check_media_type(layer):
@@ -32,21 +32,74 @@ def check_media_type(layer):
         raise ValueError(f"Unexpected layer content type {layer}")
 
 
-def get_mirror(cache_dir, subdir=None, package=None, channel=None):
+def registry_host():
+    return os.environ.get("registry_host") or "http://127.0.0.1"
+
+
+def registry_port():
+    return os.environ.get("registry_port") or 5000
+
+
+def registry_url():
+    return f"{registry_host()}:{registry_port()}"
+
+
+def test_user():
+    return "dinosaur"
+
+
+@pytest.fixture
+def oci_registry(xprocess):
+    class Starter(ProcessStarter):
+        # startup pattern
+        pattern = r".*listening on \[::\]:5000.*"
+
+        # command to start process
+        args = [
+            "docker",
+            "run",
+            "--rm",
+            "-p",
+            "5010:5000",
+            "-e",
+            "REGISTRY_STORAGE_DELETE_ENABLED=true",
+            "registry:2",
+        ]
+
+    # ensure process is running and return its logfile
+    xprocess.ensure("oci_registry", Starter)
+
+    conn = "http://localhost:5010"
+    yield conn
+
+    # clean up whole process tree afterwards
+    xprocess.getinfo("oci_registry").terminate()
+
+
+@pytest.fixture
+def subdir():
+    return None
+
+
+@pytest.fixture
+def cache_dir(tmp_path):
+    return tmp_path
+
+
+@pytest.fixture
+def mirror_instance(subdir, oci_registry, cache_dir):
     """
     Shared function to get a mirror for a particular subdir.
     """
-    registry_host = os.environ.get("registry_host") or "http://127.0.0.1"
-    registry_port = os.environ.get("registry_port") or 5000
-    host = f"{registry_host}:{registry_port}"
-
+    package = None
+    channel = None
+    print("Creating mirror with subdir", subdir, oci_registry)
     # Noarch is the only place redo exists
     channel = channel or "mirror-testing"
-    user = "dinosaur"
 
     # Interacting with a package repo means we interact with the
     # registry directly, the host + namespace.
-    registry = f"{host}/{user}"
+    registry = f"{oci_registry}/{test_user()}"
 
     return Mirror(
         channel=channel,
@@ -55,14 +108,3 @@ def get_mirror(cache_dir, subdir=None, package=None, channel=None):
         subdirs=[subdir] if subdir else None,
         cache_dir=cache_dir,
     )
-
-
-def get_tags(uri):
-    """
-    Helper function to get tags
-    """
-    result = oras.get_tags(uri)
-    assert result.status_code == 200
-    result = result.json()
-    assert "tags" in result
-    return result

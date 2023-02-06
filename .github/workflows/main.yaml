@@ -15,12 +15,11 @@ jobs:
         uses: crate-ci/typos@7ad296c72fa8265059cc03d1eda562fbdfcd6df2 # v1.9.0
         with:
           files: ./README.md
-      - name: Setup Environment
-        run: conda create --quiet --name mirror pre-commit
+      - name: Install Conda environment from environment.yml
+        uses: mamba-org/provision-with-micromamba@main
       - name: Lint Conda Oci Mirror
+        shell: bash -l {0}
         run: |
-          export PATH="/usr/share/miniconda/bin:$PATH"
-          source activate mirror
           pip install -r .github/dev-requirements.txt
           pre-commit run --all-files
 
@@ -29,21 +28,21 @@ jobs:
     services:
       registry:
         image: ghcr.io/oras-project/registry:latest
+        env:
+          REGISTRY_STORAGE_DELETE_ENABLED: "true"
         ports:
           - 5000:5000
     steps:
       - uses: actions/checkout@v3
-      - name: Setup Environment
-        run: conda create --quiet --name mirror pytest
+      - name: Install Conda environment from environment.yml
+        uses: mamba-org/provision-with-micromamba@main
       - name: Test Conda OCI Mirror
         shell: bash -l {0}
         env:
           registry_host: http://localhost
           registry_port: ${{ job.services.registry.ports[5000] }}
         run: |
-          export PATH="/usr/share/miniconda/bin:$PATH"
-          source activate mirror
-          conda install conda-build
+          micromamba install conda-build -c conda-forge
           pip install .
           pytest -xs conda_oci_mirror/tests/*.py
 
@@ -52,6 +51,8 @@ jobs:
     services:
       registry:
         image: ghcr.io/oras-project/registry:latest
+        env:
+          REGISTRY_STORAGE_DELETE_ENABLED: "true"
         ports:
           - 5000:5000
     strategy:
@@ -69,13 +70,12 @@ jobs:
       fail-fast: true
     steps:
       - uses: actions/checkout@v3
-      - name: Setup Environment
-        run: conda create --quiet --name mirror pre-commit
+      - name: Install Conda environment from environment.yml
+        uses: mamba-org/provision-with-micromamba@main
       - name: Install Conda Oci Mirror
+        shell: bash -l {0}
         run: |
-          export PATH="/usr/share/miniconda/bin:$PATH"
-          conda install conda-build
-          source activate mirror
+          micromamba install conda-build
           pip install -e .
 
       - name: Test Conda Oci Mirror
@@ -88,8 +88,6 @@ jobs:
           registry_port: ${{ job.services.registry.ports[5000] }}
         run: |
           export PYTHONUNBUFFERED=1
-          export PATH="/usr/share/miniconda/bin:$PATH"
-          source activate mirror
 
           # First run mirror
           conda-oci mirror --channel ${channel} --subdir ${subdir} --package ${package} --registry http://${registry_host}:${registry_port}/dinosaur

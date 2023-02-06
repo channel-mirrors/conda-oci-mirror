@@ -4,22 +4,20 @@ import os
 import sys
 
 import pytest
+from conftest import check_media_type
+
+import conda_oci_mirror.repo as repository
+from conda_oci_mirror.logger import setup_logger
+from conda_oci_mirror.oras import oras
+
+# Ensure we see all verbosity
+setup_logger(debug=True, quiet=False)
+
 
 # The setup.cfg doesn't install the main module proper
 here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.dirname(os.path.dirname(here))
 sys.path.insert(0, root)
-
-from helpers import check_media_type, get_mirror, get_tags  # noqa
-
-import conda_oci_mirror.repo as repository  # noqa
-from conda_oci_mirror.logger import setup_logger  # noqa
-
-# import conda_oci_mirror.defaults as defaults
-from conda_oci_mirror.oras import oras  # noqa
-
-# Ensure we see all verbosity
-setup_logger(debug=True, quiet=False)
 
 
 @pytest.mark.parametrize(
@@ -34,7 +32,7 @@ setup_logger(debug=True, quiet=False)
         ("noarch", 6, "redo"),
     ],
 )
-def test_mirror(tmp_path, subdir, num_updates, package_name):
+def test_mirror(subdir, num_updates, package_name, mirror_instance):
     """
     Test creation of a mirror
 
@@ -43,8 +41,9 @@ def test_mirror(tmp_path, subdir, num_updates, package_name):
     the package files. We verify by pull back again with oras,
     and checking file structure and/or size.
     """
-    cache_dir = os.path.join(tmp_path, "cache")
-    m = get_mirror(cache_dir, subdir=subdir)
+    m = mirror_instance
+    assert m.subdirs == [subdir]
+    cache_dir = m.cache_dir
     cache_subdir = os.path.join(cache_dir, m.channel, m.subdirs[0])
 
     assert not os.path.exists(cache_subdir)
@@ -90,13 +89,13 @@ def test_mirror(tmp_path, subdir, num_updates, package_name):
     # We can use oras to get artifacts we should have pushed
     # We should be able to pull the latest tag
     expected_latest = f"{m.registry}/{m.channel}/{subdir}/repodata.json:latest"
-    result = get_tags(expected_latest)
+    tags = oras.get_tags(expected_latest)
 
     # We minimally should have 2, one which is latest
-    assert "latest" in result["tags"]
-    assert len(result["tags"]) >= 2
+    assert "latest" in tags
+    assert len(tags) >= 2
 
-    pull_dir = os.path.join(tmp_path, "pulls")
+    pull_dir = os.path.join(cache_dir, "pulls")
     result = oras.pull(target=expected_latest, outdir=pull_dir)
     assert result
     assert os.path.exists(result[0])
@@ -114,12 +113,12 @@ def test_mirror(tmp_path, subdir, num_updates, package_name):
     assert package_name in package_names
 
     expected_repo = f"{m.registry}/{m.channel}/{subdir}/{package_name}"
-    tags = get_tags(expected_repo)
-    assert len(tags["tags"]) >= 1
+    tags = oras.get_tags(expected_repo)
+    assert len(tags) >= 1
 
     # Get the latest tag - should be newer at end (e.g., conda)
-    tag = tags["tags"][-1]
-    pull_dir = os.path.join(tmp_path, "package")
+    tag = tags[-1]
+    pull_dir = os.path.join(cache_dir, "package")
     uri = f"{expected_repo}:{tag}"
     result = oras.pull(target=uri, outdir=pull_dir)
     assert result
