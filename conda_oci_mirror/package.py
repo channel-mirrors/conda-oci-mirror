@@ -67,6 +67,14 @@ def download_file(url, dest, checksum_content=None, chunk_size=8192):
     return dest
 
 
+def reverse_version_build_tag(tag: str):
+    return tag.replace("__p__", "+").replace("__e__", "!").replace("__eq__", "=")
+
+
+def version_build_tag(tag: str):
+    return tag.replace("+", "__p__").replace("!", "__e__").replace("=", "__eq__")
+
+
 class Package:
     def __init__(
         self,
@@ -132,15 +140,11 @@ class Package:
 
     @property
     def version_build_tag(self):
-        return (
-            self.tag.replace("+", "__p__").replace("!", "__e__").replace("=", "__eq__")
-        )
+        return version_build_tag(self.tag)
 
     @property
     def reverse_version_build_tag(self):
-        return (
-            self.tag.replace("__p__", "+").replace("__e__", "!").replace("__eq__", "=")
-        )
+        return reverse_version_build_tag(self.tag)
 
     def delete(self):
         if self.file and os.path.exists(self.file):
@@ -204,7 +208,10 @@ class Package:
 
             # Annotations are only included with tar.bz2
             annotations = None
-            if media_type == defaults.package_conda_media_type:
+            if media_type in [
+                defaults.package_conda_media_type,
+                defaults.package_tarbz2_media_type,
+            ]:
                 annotations = {"org.conda.md5": util.md5sum(archive)}
             pusher.add_layer(archive, media_type, title, annotations)
 
@@ -246,6 +253,6 @@ class Package:
 
             # Push main tag and extras
             uri = f"{self.registry}/{self.channel}/{self.subdir}/{name}"
-            for tag in [version_and_build] + list(extra_tags):
+            for tag in [self.version_build_tag] + list(extra_tags):
                 items.append(pusher.push(f"{uri}:{tag}"))
             return items

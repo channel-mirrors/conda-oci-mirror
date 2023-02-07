@@ -13,6 +13,7 @@ import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.util as util
 from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import Pusher, oras
+from conda_oci_mirror.package import reverse_version_build_tag
 
 # This is shared between PackageRepo instances
 existing_tags_cache = {}
@@ -361,7 +362,7 @@ class PackageRepo:
         # We likely want this to raise an error if there is one.
         tags = oras.get_tags(gh_name, N=100_000_000)
         logger.info(f"Found {len(tags)} tags for {gh_name}")
-        existing_tags_cache[package] = tags
+        existing_tags_cache[package] = [reverse_version_build_tag(t) for t in tags]
         return tags
 
     def get_existing_packages(self, package, registry=None, package_ext="conda"):
