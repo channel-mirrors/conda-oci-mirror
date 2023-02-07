@@ -64,8 +64,7 @@ class Pusher:
             raise FileExistsError(f"{path} does not exist.")
 
         annotations = annotations or {}
-        size = os.path.getsize(path)  # bytes
-        annotations = {"creationTime": self.created_at, "size": str(size)}
+        annotations.update({"creationTime": self.created_at})
         self.layers.append(
             {
                 "path": path,
