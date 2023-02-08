@@ -2,14 +2,14 @@ import hashlib
 import multiprocessing as mp
 import os
 import time
+
 import requests
-import yaml
 import xattr
+import yaml
 
-
+import conda_oci_mirror.package as pkg
 from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import oras
-import conda_oci_mirror.package as pkg
 
 # Counters for lifetime of tasks
 package_counter = mp.Value("i", 0)
@@ -105,7 +105,7 @@ class PackageUploadTask(TaskBase):
         # delete the package
         self.pkg.delete()
         return result
-    
+
 
 class SourceDownloadTask(TaskBase):
     """
@@ -127,7 +127,7 @@ class SourceDownloadTask(TaskBase):
         # Wait based on the last interaction time
         self.wait()
 
-        if not "url" in source:
+        if "url" not in source:
             return
 
         url = source.get("url")
@@ -136,12 +136,10 @@ class SourceDownloadTask(TaskBase):
             raise Exception(f"Cannot pull package {url}: no sha256")
 
         # get extension, can be .tar.gz, .tar.bz2, .zip, etc.
-        if url.endswith(".tar.gz"):
-            ext = ".tar.gz"
-        elif url.endswith(".tar.bz2"):
-            ext = ".tar.bz2"
-        else:
-            ext = os.path.splitext(url)[1]
+        rest, ext = os.path.splitext(url)
+        tar_ext = os.path.splitext(rest)[1]
+        if tar_ext == ".tar":
+            ext = tar_ext + ext
 
         fn = os.path.join(self.cache_dir, sha256 + ext)
 
@@ -169,17 +167,17 @@ class SourceDownloadTask(TaskBase):
     def _get_info(self):
         try:
             info = self.info
-            name, version, build = info['name'], info['version'], info['build']
+            name, version, build = info["name"], info["version"], info["build"]
             tag = pkg.version_build_tag(f"{version}-{build}")
             info = self.repo.get_info(f"{name}:{tag}")
-        except:
-            logger.warning(f"info not extractable, skipping {self.pkg_name}")
+        except Exception as e:
+            logger.warning(f"info not extractable, skipping {self.pkg_name} {e}")
             return False
 
         try:
             f = info.extractfile("recipe/meta.yaml")
-        except:
-            logger.warning(f"recipe not extractable, skipping {self.pkg_name}")
+        except Exception as e:
+            logger.warning(f"recipe not extractable, skipping {self.pkg_name} {e}")
             return False
 
         try:
@@ -190,8 +188,13 @@ class SourceDownloadTask(TaskBase):
 
         if "source" in y:
             self.sources = y["source"]
-            logger.info(f"{y['package']['name']} {y['package']['version']}: {self.sources}")
+            logger.info(
+                f"{y['package']['name']} {y['package']['version']}: {self.sources}"
+            )
             return True
+        else:
+            logger.warning(f"recipe has no source, skipping {self.pkg_name}")
+            return False
 
     def run(self):
         """

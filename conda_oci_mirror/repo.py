@@ -308,7 +308,14 @@ class PackageRepo:
             return RepoData(self.patches)
         return RepoData(self.repodata)
 
-    def find_packages(self, names=None, skips=None, registry=None, include_yanked=True, ignore_existing=False):
+    def find_packages(
+        self,
+        names=None,
+        skips=None,
+        registry=None,
+        include_yanked=True,
+        ignore_existing=False,
+    ):
         """
         Given loaded repository data, find packages of interest
         """
