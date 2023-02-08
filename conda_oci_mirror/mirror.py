@@ -81,6 +81,46 @@ class Mirror:
             get_forbidden_packages() if channel == "conda-forge" else None
         )
 
+    def pull_source(self, dry_run=False, serial=False, include_yanked=True):
+        """
+        Update from a conda mirror (do a mirror) akin to a pull and a push.
+        """
+        util.print_item("To: ", self.registry)
+
+        # Create a task runner (defaults to 4 processes)
+        runner = tasks.TaskRunner(workers=20)
+
+        # If they think they are pushing but no auth, they are not :)
+        if not oras.has_auth and dry_run is False:
+            logger.warning(
+                "ORAS is not authenticated, if you registry requires auth this will not work"
+            )
+
+        source_cache_dir = os.path.join(self.cache_dir, self.channel, "source_cache")
+
+        for subdir, cache_dir in self.iter_subdirs():
+            repo = repository.PackageRepo(
+                self.channel, subdir, cache_dir, self.registry
+            )
+
+            # Run filter based on packages we are looking for, and forbidden
+            # This includes packages and packages.conda. If include yanked is true,
+            # this means we use repodata_from_packages.json that includes removed.
+            packages = []
+            for package, info in repo.find_packages(
+                self.packages,
+                self.skip_packages,
+                include_yanked=include_yanked,
+                ignore_existing=True,
+            ):
+                packages.append((package, info))
+                name = info["name"]
+                runner.add_task(
+                    tasks.SourceDownloadTask(name, info, repo, source_cache_dir)
+                )
+
+        return runner.run()
+
     def announce(self):
         """
         Show metadata about the mirror setup
