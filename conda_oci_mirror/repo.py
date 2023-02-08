@@ -245,6 +245,9 @@ class PackageRepo:
         util.mkdir_p(os.path.dirname(self.repodata))
         logger.info(f"Downloading patches for {self.channel}/{self.subdir}")
 
+        if os.path.exists(self.patches) and os.path.exists(self.repodata):
+            return
+
         # The repodata is "patched" by this file: repodata_from_packages.json
         patches = requests.get(
             f"https://conda.anaconda.org/{self.channel}/{self.subdir}/repodata_from_packages.json",
@@ -305,7 +308,7 @@ class PackageRepo:
             return RepoData(self.patches)
         return RepoData(self.repodata)
 
-    def find_packages(self, names=None, skips=None, registry=None, include_yanked=True):
+    def find_packages(self, names=None, skips=None, registry=None, include_yanked=True, ignore_existing=False):
         """
         Given loaded repository data, find packages of interest
         """
@@ -325,16 +328,17 @@ class PackageRepo:
             if skips and info["name"] in skips:
                 continue
 
-            # Existing packages for this will depend on the extension
-            try:
-                existing_packages = self.get_existing_packages(
-                    info["name"],
-                    registry=registry,
-                    package_ext=repodata.get_package_extension(pkg),
-                )
-            except (ValueError, TypeError):
-                logger.warning(f"Package not yet in registry ({pkg})")
-                existing_packages = set()
+            existing_packages = set()
+            if not ignore_existing:
+                # Existing packages for this will depend on the extension
+                try:
+                    existing_packages = self.get_existing_packages(
+                        info["name"],
+                        registry=registry,
+                        package_ext=repodata.get_package_extension(pkg),
+                    )
+                except (ValueError, TypeError):
+                    logger.warning(f"Package not yet in registry ({pkg})")
 
             # This check includes extension, so shouldn't be an issue
             if pkg not in existing_packages:

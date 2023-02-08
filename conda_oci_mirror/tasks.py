@@ -1,8 +1,15 @@
+import hashlib
 import multiprocessing as mp
+import os
 import time
+import requests
+import yaml
+import xattr
+
 
 from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import oras
+import conda_oci_mirror.package as pkg
 
 # Counters for lifetime of tasks
 package_counter = mp.Value("i", 0)
@@ -25,7 +32,7 @@ class TaskBase:
             lt = last_upload_time.value
             now = time.time()
             # Slighly slower than the original 0.5 rate limit
-            rt = 0.7
+            rt = 0.25
             if now - lt < rt:
                 print(f"Rate limit sleep for {(lt + rt) - now}")
                 time.sleep((lt + rt) - now)
@@ -98,6 +105,112 @@ class PackageUploadTask(TaskBase):
         # delete the package
         self.pkg.delete()
         return result
+    
+
+class SourceDownloadTask(TaskBase):
+    """
+    A simple task to download a source package
+    """
+
+    def __init__(self, name, info, repo, cache_dir):
+        self.pkg_name = name
+        self.info = info
+        self.repo = repo
+        self.cache_dir = os.path.join(cache_dir, name)
+        if not os.path.exists(self.cache_dir):
+            os.makedirs(self.cache_dir)
+
+    def _download_source(self, source):
+        """
+        Download a single source
+        """
+        # Wait based on the last interaction time
+        self.wait()
+
+        if not "url" in source:
+            return
+
+        url = source.get("url")
+        sha256 = source.get("sha256")
+        if not sha256:
+            raise Exception(f"Cannot pull package {url}: no sha256")
+
+        # get extension, can be .tar.gz, .tar.bz2, .zip, etc.
+        if url.endswith(".tar.gz"):
+            ext = ".tar.gz"
+        elif url.endswith(".tar.bz2"):
+            ext = ".tar.bz2"
+        else:
+            ext = os.path.splitext(url)[1]
+
+        fn = os.path.join(self.cache_dir, sha256 + ext)
+
+        try:
+            request = requests.get(url, stream=True)
+            request.raise_for_status()
+            with open(fn, "wb") as f:
+                for chunk in request.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
+            # check sha256 of the file
+            with open(fn, "rb") as f:
+                file_sha256 = hashlib.sha256(f.read()).hexdigest()
+                if file_sha256 != sha256:
+                    os.remove(fn)
+                    raise Exception(
+                        f"File {url} has sha256 {file_sha256} but expected {sha256}"
+                    )
+
+                x = xattr.xattr(f)
+                x.set("user.source.url", url.encode("utf-8"))
+        except Exception as e:
+            logger.warning(f"Cannot pull package {url}: {e}")
+
+    def _get_info(self):
+        try:
+            info = self.info
+            name, version, build = info['name'], info['version'], info['build']
+            tag = pkg.version_build_tag(f"{version}-{build}")
+            info = self.repo.get_info(f"{name}:{tag}")
+        except:
+            logger.warning(f"info not extractable, skipping {self.pkg_name}")
+            return False
+
+        try:
+            f = info.extractfile("recipe/meta.yaml")
+        except:
+            logger.warning(f"recipe not extractable, skipping {self.pkg_name}")
+            return False
+
+        try:
+            y = yaml.safe_load(f)
+        except yaml.YAMLError as exc:
+            logger.warning(f"recipe not parseable, skipping {self.pkg_name} {exc}")
+            return False
+
+        if "source" in y:
+            self.sources = y["source"]
+            logger.info(f"{y['package']['name']} {y['package']['version']}: {self.sources}")
+            return True
+
+    def run(self):
+        """
+        Run the task to download the package
+        """
+        # Wait based on the last interaction time
+        self.wait()
+        has_info = self._get_info()
+        if not has_info:
+            logger.warning(f"Cannot pull package {self.pkg_name}: Could not load info")
+            return
+        try:
+            if isinstance(self.sources, list):
+                for source in self.sources:
+                    self._download_source(source)
+            else:
+                self._download_source(self.sources)
+        except Exception as e:
+            logger.warning(f"Cannot pull package {self.pkg_name}: {e}")
 
 
 class DownloadTask(TaskBase):
@@ -128,7 +241,7 @@ class TaskRunner:
     A task runner knows how to time and run tasks!
     """
 
-    def __init__(self, workers=1):
+    def __init__(self, workers=4):
         self.workers = workers
         self.tasks = []
 

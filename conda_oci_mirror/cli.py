@@ -103,3 +103,23 @@ def push_cache(
         m.push_all(dry_run)
     else:
         m.push_new(dry_run)
+
+
+@main.command()
+@add_options(options)
+def pull_source(channel, subdir, registry, package, cache_dir, dry_run, quiet, debug):
+    """
+    Pull a remote host/user to a local cache_dir
+    """
+    setup_logger(
+        quiet=quiet,
+        debug=debug,
+    )
+    m = Mirror(
+        channel=channel,
+        subdirs=subdir,
+        packages=package,
+        registry=registry,
+        cache_dir=cache_dir,
+    )
+    m.pull_source(dry_run)
