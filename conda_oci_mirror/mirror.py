@@ -49,6 +49,8 @@ class Mirror:
         cache_dir=None,
         quiet=False,
         insecure=False,
+        workers=4,
+        timeout=700,
     ):
         self.channel = channel
         self.subdirs = subdirs or defaults.DEFAULT_SUBDIRS
@@ -81,6 +83,12 @@ class Mirror:
             get_forbidden_packages() if channel == "conda-forge" else None
         )
 
+        # Set the number of workers
+        self.workers = workers
+
+        # Set the timeout
+        self.timeout = timeout / 1000.0
+
     def announce(self):
         """
         Show metadata about the mirror setup
@@ -98,7 +106,7 @@ class Mirror:
         util.print_item("To: ", self.registry)
 
         # Create a task runner (defaults to 4 processes)
-        runner = tasks.TaskRunner()
+        runner = tasks.TaskRunner(workers=self.workers)
 
         # If they think they are pushing but no auth, they are not :)
         if not oras.has_auth and dry_run is False:
@@ -122,7 +130,11 @@ class Mirror:
                 task = pkg.Package(
                     self.channel, subdir, package, cache_dir, self.registry, info=info
                 )
-                runner.add_task(tasks.PackageUploadTask(task, dry_run=dry_run))
+                runner.add_task(
+                    tasks.PackageUploadTask(
+                        task, wait_time=self.timeout, dry_run=dry_run
+                    )
+                )
 
             # We can't actually push without auth
             if dry_run:
@@ -158,7 +170,7 @@ class Mirror:
         util.print_item("  To: ", self.cache_dir)
 
         # Create a task runner to do pulls
-        runner = tasks.TaskRunner()
+        runner = tasks.TaskRunner(workers=self.workers)
 
         for subdir, cache_dir in self.iter_subdirs():
             # Note that the original channel is relevant for a mirror
@@ -240,7 +252,7 @@ class Mirror:
         for subdir, cache_dir in self.iter_subdirs():
             # Create a new task runner per subdir
             # The reason is that we cleanup between them
-            runner = tasks.TaskRunner()
+            runner = tasks.TaskRunner(workers=self.workers)
 
             # The channel cache is one level up from our subdir cache
             channel_root = os.path.dirname(cache_dir)
@@ -287,7 +299,11 @@ class Mirror:
                     existing_file=str(package_name),
                     timestamp=timestamp,
                 )
-                runner.add_task(tasks.PackageUploadTask(task, dry_run=dry_run))
+                runner.add_task(
+                    tasks.PackageUploadTask(
+                        task, wait_time=self.timeout, dry_run=dry_run
+                    )
+                )
 
             # Run tasks for this runner
             if serial:

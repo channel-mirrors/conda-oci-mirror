@@ -15,7 +15,7 @@ class TaskBase:
     Shared task base for all tasks
     """
 
-    def wait(self):
+    def wait(self, wait_time=0.7):
         """
         Wait the appropriate timeout for the last upload time.
         """
@@ -25,10 +25,9 @@ class TaskBase:
             lt = last_upload_time.value
             now = time.time()
             # Slighly slower than the original 0.5 rate limit
-            rt = 0.7
-            if now - lt < rt:
-                print(f"Rate limit sleep for {(lt + rt) - now}")
-                time.sleep((lt + rt) - now)
+            if now - lt < wait_time:
+                # print(f"Rate limit sleep for {(lt + wait_time) - now}")
+                time.sleep((lt + wait_time) - now)
             last_upload_time.value = now
 
 
@@ -61,9 +60,10 @@ class PackageUploadTask(TaskBase):
     A single task to upload a package, and cleanup.
     """
 
-    def __init__(self, pkg, dry_run=False):
+    def __init__(self, pkg, dry_run=False, wait_time=0.5):
         self.dry_run = dry_run
         self.pkg = pkg
+        self.wait_time = wait_time
 
     def run(self):
         """
@@ -78,7 +78,7 @@ class PackageUploadTask(TaskBase):
         global package_counter, counter_start
 
         # Wait based on the last upload time across tasks
-        self.wait()
+        self.wait(self.wait_time)
 
         # This has retry wrapper - we get back metadata about the package pushed
         result = self.pkg.upload(self.dry_run)
