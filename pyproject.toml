@@ -1,6 +1,41 @@
 [build-system]
-requires = ["setuptools>=40.8.0", "wheel"]
+requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "conda-oci-mirror"
+authors = [
+    {name = "conda-oci-mirror team", email = "conda_oci_mirror@issues.github.com"},
+]
+description = "Tools to mirror conda packages to an OCI registry."
+readme = "README.md"
+requires-python = ">=3.7"
+keywords = ["mamba", "conda", "oci"]
+license = {text = "BSD-3-Clause"}
+classifiers = [
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10"
+]
+dependencies = [
+    "click",
+    "requests",
+    "oras==0.1.14",
+    "conda-package-handling"
+]
+dynamic = ["version"]
+
+[project.scripts]
+conda-oci = "conda_oci_mirror.cli:main"
+
+[tool.setuptools_scm]
+write_to = "conda_oci_mirror/_version.py"
 
 [tool.isort]
 profile = "black"
