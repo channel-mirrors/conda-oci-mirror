@@ -4,7 +4,9 @@ import datetime
 import distutils.version
 import fnmatch
 import os
+import zstandard as zstd
 import tarfile
+import tempfile
 
 import requests
 
@@ -282,6 +284,11 @@ class PackageRepo:
         pusher = Pusher(root, self.timestamp)
         pusher.add_layer(self.repodata, defaults.repodata_media_type_v1, title)
 
+        # compress repodata with zstd
+        compressed = self.compress_repodata()
+        pusher.add_layer(compressed, defaults.repodata_media_type_v1_zst, title)
+
+        pusher.add_layer()
         # Push for a tag for the date, and latest
         for tag in pusher.created_at, "latest":
             logger.info(f"  pushing tag {tag}")
@@ -289,6 +296,26 @@ class PackageRepo:
 
         # Return pushes
         return pushes
+
+    def compress_repodata(self):
+        # Create a temporary file
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.zst')
+
+        # Initialize Zstandard compressor
+        cctx = zstd.ZstdCompressor(level=15)
+
+        with open(self.repodata, 'rb') as source_file:
+            # Read the content of the source file
+            data = source_file.read()
+
+            # Compress the data
+            compressed_data = cctx.compress(data)
+
+            # Write the compressed data to the temporary file
+            temp_file.write(compressed_data)
+
+        # Return the path to the temporary file
+        return temp_file.name
 
     def load_repodata(self, include_yanked=True):
         """
