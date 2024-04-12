@@ -299,7 +299,7 @@ class PackageRepo:
 
     def compress_repodata(self):
         # Create a temporary file
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.zst')
+        zst_file = self.repodata + '.zst'
 
         # Initialize Zstandard compressor
         cctx = zstd.ZstdCompressor(level=15)
@@ -311,11 +311,11 @@ class PackageRepo:
             # Compress the data
             compressed_data = cctx.compress(data)
 
-            # Write the compressed data to the temporary file
-            temp_file.write(compressed_data)
+            with open(zst_file, 'wb') as zst_file:
+                zst_file.write(compressed_data)
 
         # Return the path to the temporary file
-        return temp_file.name
+        return zst_file
 
     def load_repodata(self, include_yanked=True):
         """
