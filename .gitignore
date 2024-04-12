@@ -4,3 +4,6 @@ build/
 *.egg-info
 cache/
 env
+# pixi environments
+.pixi
+*.egg-info

@@ -20,7 +20,6 @@ jobs:
       - name: Lint Conda Oci Mirror
         shell: bash -l {0}
         run: |
-          pip install -r .github/dev-requirements.txt
           pre-commit run --all-files
 
   testing:

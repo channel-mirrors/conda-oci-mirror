@@ -4,11 +4,10 @@ import datetime
 import distutils.version
 import fnmatch
 import os
-import zstandard as zstd
 import tarfile
-import tempfile
 
 import requests
+import zstandard as zstd
 
 import conda_oci_mirror.decorators as decorators
 import conda_oci_mirror.defaults as defaults

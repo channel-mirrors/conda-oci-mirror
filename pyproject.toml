@@ -29,6 +29,7 @@ dependencies = [
     "oras==0.1.14",
     "conda-package-handling"
 ]
+
 dynamic = ["version"]
 
 [project.scripts]
