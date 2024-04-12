@@ -310,8 +310,8 @@ class PackageRepo:
             # Compress the data
             compressed_data = cctx.compress(data)
 
-            with open(zst_file, "wb") as zst_file:
-                zst_file.write(compressed_data)
+            with open(zst_file, "wb") as fout:
+                fout.write(compressed_data)
 
         # Return the path to the temporary file
         return zst_file
