@@ -43,5 +43,4 @@ profile = "black"
 skip = []
 
 [tool.black]
-profile = "black"
-exclude = ["^env/"]
+exclude = "^env/"
