@@ -287,7 +287,6 @@ class PackageRepo:
         compressed = self.compress_repodata()
         pusher.add_layer(compressed, defaults.repodata_media_type_v1_zst, title)
 
-        pusher.add_layer()
         # Push for a tag for the date, and latest
         for tag in pusher.created_at, "latest":
             logger.info(f"  pushing tag {tag}")
