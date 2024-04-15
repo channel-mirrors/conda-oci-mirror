@@ -60,7 +60,7 @@ def test_mirror(subdir, num_updates, package_name, mirror_instance):
             for key in ["path", "title", "media_type", "annotations"]:
                 assert key in layer
             # The title should be the file basename
-            assert layer["path"].endswith(layer["title"])
+            assert layer["title"] in layer["path"]
 
             check_media_type(layer)
 

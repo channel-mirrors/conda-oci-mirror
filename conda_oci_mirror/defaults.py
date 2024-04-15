@@ -6,6 +6,7 @@ info_index_media_type = "application/vnd.conda.info.index.v1+json"
 package_tarbz2_media_type = "application/vnd.conda.package.v1"
 package_conda_media_type = "application/vnd.conda.package.v2"
 repodata_media_type_v1 = "application/vnd.conda.repodata.v1+json"
+repodata_media_type_v1_zst = "application/vnd.conda.repodata.v1+json+zst"
 
 CACHE_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__))) / "cache"
 

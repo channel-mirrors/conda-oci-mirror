@@ -7,6 +7,7 @@ import os
 import tarfile
 
 import requests
+import zstandard as zstd
 
 import conda_oci_mirror.decorators as decorators
 import conda_oci_mirror.defaults as defaults
@@ -282,6 +283,10 @@ class PackageRepo:
         pusher = Pusher(root, self.timestamp)
         pusher.add_layer(self.repodata, defaults.repodata_media_type_v1, title)
 
+        # compress repodata with zstd
+        compressed = self.compress_repodata()
+        pusher.add_layer(compressed, defaults.repodata_media_type_v1_zst, title)
+
         # Push for a tag for the date, and latest
         for tag in pusher.created_at, "latest":
             logger.info(f"  pushing tag {tag}")
@@ -289,6 +294,26 @@ class PackageRepo:
 
         # Return pushes
         return pushes
+
+    def compress_repodata(self):
+        # Create a temporary file
+        zst_file = self.repodata + ".zst"
+
+        # Initialize Zstandard compressor
+        cctx = zstd.ZstdCompressor(level=15)
+
+        with open(self.repodata, "rb") as source_file:
+            # Read the content of the source file
+            data = source_file.read()
+
+            # Compress the data
+            compressed_data = cctx.compress(data)
+
+            with open(zst_file, "wb") as fout:
+                fout.write(compressed_data)
+
+        # Return the path to the temporary file
+        return zst_file
 
     def load_repodata(self, include_yanked=True):
         """

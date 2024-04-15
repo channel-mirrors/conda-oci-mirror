@@ -190,7 +190,7 @@ class Mirror:
                 )
 
             except Exception as e:
-                logger.warning(f"Issue retriving uri: {uri}: {e}")
+                logger.warning(f"Issue retrieving uri: {uri}: {e}")
 
             # Don't repeat requests for same uri and media type
             seen = set()
