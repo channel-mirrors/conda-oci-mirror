@@ -16,7 +16,7 @@ jobs:
         with:
           files: ./README.md
       - name: Install Conda environment from environment.yml
-        uses: mamba-org/provision-with-micromamba@27a5132821b7587bce150a61dac07722b1309ef5 # v1
+        uses: mamba-org/provision-with-micromamba@3c96c0c27676490c63c18bc81f5c51895ac3e0e6 # v16
       - name: Lint Conda Oci Mirror
         shell: bash -l {0}
         run: |
@@ -34,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
       - name: Install Conda environment from environment.yml
-        uses: mamba-org/provision-with-micromamba@27a5132821b7587bce150a61dac07722b1309ef5 # v1
+        uses: mamba-org/provision-with-micromamba@3c96c0c27676490c63c18bc81f5c51895ac3e0e6 # v16
       - name: Test Conda OCI Mirror
         shell: bash -l {0}
         env:
@@ -70,7 +70,7 @@ jobs:
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3
       - name: Install Conda environment from environment.yml
-        uses: mamba-org/provision-with-micromamba@27a5132821b7587bce150a61dac07722b1309ef5 # v1
+        uses: mamba-org/provision-with-micromamba@3c96c0c27676490c63c18bc81f5c51895ac3e0e6 # v16
       - name: Install Conda Oci Mirror
         shell: bash -l {0}
         run: |
