@@ -57,7 +57,7 @@ jobs:
     strategy:
       max-parallel: 12
       matrix:
-        package: [ redo ]
+        package: [redo]
         subdir:
           - linux-64
           - osx-64
