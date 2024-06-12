@@ -43,8 +43,7 @@ def check_checksum(path, package_dict):
         return True
 
 
-@retry(attempts=5, timeout=2)
-def download_file(url, dest, checksum_content=None, chunk_size=8192):
+def _download_file_once(url, dest, checksum_content=None, chunk_size=8192):
     """
     Stream download a file!
     """
@@ -65,6 +64,9 @@ def download_file(url, dest, checksum_content=None, chunk_size=8192):
         raise RuntimeError("checksums wrong")
 
     return dest
+
+
+download_file = retry(attempts=5, timeout=2)(_download_file_once)
 
 
 def reverse_version_build_tag(tag: str):
@@ -106,11 +108,21 @@ class Package:
         """
         # This will retry 5 times and ensure the checksums match
         if not self.file or not os.path.exists(self.file):
-            url = f"https://conda.anaconda.org/{self.channel}/{self.subdir}/{self.package}"
+            urls = (
+                f"https://conda.anaconda.org/{self.channel}/{self.subdir}/{self.package}",
+                f"https://conda-web.anaconda.org/{self.channel}/{self.subdir}/{self.package}",
+            )
             dest = os.path.join(self.cache_dir, self.package)
 
-            # Download the file and return it's path (default is to stream)
-            self.file = download_file(url, dest, self.package_info)
+            # Download the file and return its path (default is to stream)
+            try:
+                self.file = download_file(urls[0], dest, self.package_info)
+            except Exception as exc:
+                logger.warning(
+                    "Main URL %s failed. Retrying with fallback %s", *urls, exc_info=exc
+                )
+                # We don't want to spam conda-web too much, so no retries
+                self.file = _download_file_once(urls[1], dest, self.package_info)
 
     @property
     def package_name(self):
