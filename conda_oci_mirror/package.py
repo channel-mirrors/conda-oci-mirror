@@ -119,7 +119,8 @@ class Package:
                 self.file = download_file(urls[0], dest, self.package_info)
             except Exception as exc:
                 logger.warning(
-                    "Main URL %s failed. Retrying with fallback %s", *urls, exc_info=exc
+                    f"Main URL {urls[0]} failed. Retrying with fallback {urls[1]}. "
+                    f"{exc.__class__.__name__}: {exc}"
                 )
                 # We don't want to spam conda-web too much, so no retries
                 self.file = _download_file_once(urls[1], dest, self.package_info)
