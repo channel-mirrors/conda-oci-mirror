@@ -10,9 +10,9 @@ jobs:
   linting:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v3
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v3
       - name: Check Spelling
-        uses: crate-ci/typos@d503507db9c5d116c79135435b149cd0f27d726e # v1.21.0
+        uses: crate-ci/typos@935271f0204ebdf61717cf6caac31d8d115f1c14 # v1.23.6
         with:
           files: ./README.md
       - name: Install Conda environment from environment.yml
@@ -32,7 +32,7 @@ jobs:
         ports:
           - 5000:5000
     steps:
-      - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v3
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v3
       - name: Install Conda environment from environment.yml
         uses: mamba-org/provision-with-micromamba@3c96c0c27676490c63c18bc81f5c51895ac3e0e6 # v16
       - name: Test Conda OCI Mirror
@@ -68,7 +68,7 @@ jobs:
           - noarch
       fail-fast: true
     steps:
-      - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v3
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v3
       - name: Install Conda environment from environment.yml
         uses: mamba-org/provision-with-micromamba@3c96c0c27676490c63c18bc81f5c51895ac3e0e6 # v16
       - name: Install Conda Oci Mirror
