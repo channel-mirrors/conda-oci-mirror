@@ -1,0 +1,26 @@
+[project]
+name = "conda-oci-mirror"
+channels = ["conda-forge"]
+platforms = ["linux-64", "linux-aarch64", "linux-ppc64le", "osx-64", "osx-arm64", "win-64"]
+
+[tasks]
+postinstall = "pip install --no-deps --no-build-isolation -e ."
+test = "pytest"
+
+[dependencies]
+python = ">=3.9"
+pip = "*"
+setuptools-scm = "*"
+python-build = "*"
+twine = "*"
+requests = "*"
+conda-package-handling = "*"
+oras-py = ">=0.2.2,<0.3"
+click = "*"
+# test
+pytest = "*"
+pytest-xprocess = "*"
+conda-build = "*"
+# lint
+pre-commit = "*"
+ruff = "*"

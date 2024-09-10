@@ -19,19 +19,8 @@ repos:
       - id: pylint
         args: [--disable=all, --enable=unused-import]
 
-  - repo: https://github.com/psf/black
-    rev: 24.3.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.4
     hooks:
-      - id: black
-
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        args: [--filter-files]
-
-  - repo: https://github.com/PyCQA/flake8
-    rev: 7.0.0
-    hooks:
-      - id: flake8
-        args: [--ignore=E501]
+      - id: ruff
+      - id: ruff-format

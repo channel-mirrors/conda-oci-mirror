@@ -1,9 +1,0 @@
-name: oci_mirror_env
-channels:
-  - conda-forge
-dependencies:
-  - python=3.10
-  - pip
-  - pre-commit
-  - pytest
-  - pytest-xprocess
