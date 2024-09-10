@@ -299,7 +299,7 @@ $ conda-oci mirror --channel conda-forge --package testinfra --registry http://1
 And run tests:
 
 ```bash
-$ pytest -xs conda_oci_mirror/tests/*.py
+$ pytest -xs
 ```
 
 See [TODO.md](TODO.md) for some questions and items to do.
@@ -309,12 +309,11 @@ See [TODO.md](TODO.md) for some questions and items to do.
 We use pre-commit for linting. You can install dependencies and run it:
 
 ```bash
-$ pip install -r .github/dev-requirements.txt
-$ pre-commit run --all-files
+$ pixi run pre-commit run --all-files
 ```
 
 Or install to the repository so it always runs before commit!
 
 ```bash
-$ pre-commit install
+$ pixi run pre-commit install
 ```

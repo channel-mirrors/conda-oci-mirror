@@ -4,7 +4,10 @@ permissions:
   contents: read
 
 on:
-  pull_request: []
+  push:
+    branches:
+      - main
+  pull_request:
 
 jobs:
   linting:
@@ -15,12 +18,11 @@ jobs:
         uses: crate-ci/typos@d503507db9c5d116c79135435b149cd0f27d726e # v1.21.0
         with:
           files: ./README.md
-      - name: Install Conda environment from environment.yml
-        uses: mamba-org/provision-with-micromamba@3c96c0c27676490c63c18bc81f5c51895ac3e0e6 # v16
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@ba3bb36eb2066252b2363392b7739741bb777659 # v0.8.1
       - name: Lint Conda Oci Mirror
-        shell: bash -l {0}
         run: |
-          pre-commit run --all-files
+          pixi run pre-commit run --all-files
 
   testing:
     runs-on: ubuntu-latest
@@ -33,17 +35,16 @@ jobs:
           - 5000:5000
     steps:
       - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v3
-      - name: Install Conda environment from environment.yml
-        uses: mamba-org/provision-with-micromamba@3c96c0c27676490c63c18bc81f5c51895ac3e0e6 # v16
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@ba3bb36eb2066252b2363392b7739741bb777659 # v0.8.1
+      - name: Install repository
+        run: pixi run postinstall
       - name: Test Conda OCI Mirror
-        shell: bash -l {0}
         env:
           registry_host: http://localhost
           registry_port: ${{ job.services.registry.ports[5000] }}
         run: |
-          micromamba install conda-build -c conda-forge
-          pip install .
-          pytest -xs conda_oci_mirror/tests/*.py
+          pixi run test -xs
 
   mirror-pkgs:
     runs-on: ubuntu-latest
@@ -69,25 +70,21 @@ jobs:
       fail-fast: true
     steps:
       - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v3
-      - name: Install Conda environment from environment.yml
-        uses: mamba-org/provision-with-micromamba@3c96c0c27676490c63c18bc81f5c51895ac3e0e6 # v16
-      - name: Install Conda Oci Mirror
-        shell: bash -l {0}
-        run: |
-          micromamba install conda-build
-          pip install -e .
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@ba3bb36eb2066252b2363392b7739741bb777659 # v0.8.1
+      - name: Install repository
+        run: pixi run postinstall
 
       - name: Test Conda Oci Mirror
-        shell: bash -l {0}
+        shell: pixi run bash -e {0}
         env:
           channel: conda-forge
           subdir: ${{ matrix.subdir }}
           package: ${{ matrix.package }}
           registry_host: localhost
           registry_port: ${{ job.services.registry.ports[5000] }}
+          PYTHONUNBUFFERED: 1
         run: |
-          export PYTHONUNBUFFERED=1
-
           # First run mirror
           conda-oci mirror --channel ${channel} --subdir ${subdir} --package ${package} --registry http://${registry_host}:${registry_port}/dinosaur
 

@@ -8,3 +8,4 @@ env
 .pixi
 *.egg-info
 conda_oci_mirror/_version.py
+dist/
