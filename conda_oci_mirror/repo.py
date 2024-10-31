@@ -1,11 +1,11 @@
 # Packages and functions for them
 
 import datetime
-import distutils.version
 import fnmatch
 import os
 import tarfile
 
+import packaging.version
 import requests
 import zstandard as zstd
 
@@ -13,7 +13,7 @@ import conda_oci_mirror.decorators as decorators
 import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.util as util
 from conda_oci_mirror.logger import logger
-from conda_oci_mirror.oras import Pusher, oras
+from conda_oci_mirror.oras import Pusher
 from conda_oci_mirror.package import reverse_version_build_tag
 
 # This is shared between PackageRepo instances
@@ -131,7 +131,7 @@ class RepoData:
 
         # Find latest tag from set of highest build numbers
         tags = list(packages)
-        tags.sort(key=distutils.version.StrictVersion)
+        tags.sort(key=packaging.version.Version)
 
         # The tag is technically the version + build number
         latest = packages[tags[-1]]

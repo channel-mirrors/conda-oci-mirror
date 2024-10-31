@@ -27,7 +27,9 @@ dependencies = [
     "click",
     "requests",
     "oras==0.1.14",
-    "conda-package-handling"
+    "conda-package-handling",
+    "zstandard",
+    "packaging",
 ]
 
 dynamic = ["version"]
