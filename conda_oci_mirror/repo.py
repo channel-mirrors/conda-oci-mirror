@@ -13,7 +13,7 @@ import conda_oci_mirror.decorators as decorators
 import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.util as util
 from conda_oci_mirror.logger import logger
-from conda_oci_mirror.oras import Pusher
+from conda_oci_mirror.oras import Pusher, oras
 from conda_oci_mirror.package import reverse_version_build_tag
 
 # This is shared between PackageRepo instances
