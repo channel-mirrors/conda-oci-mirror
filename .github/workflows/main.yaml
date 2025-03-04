@@ -4,7 +4,7 @@ permissions:
   contents: read
 
 on:
-  pull_request: []
+  pull_request: null
 
 jobs:
   linting:
@@ -16,9 +16,11 @@ jobs:
         with:
           files: ./README.md
       - name: Install Conda environment from environment.yml
-        uses: mamba-org/provision-with-micromamba@3c96c0c27676490c63c18bc81f5c51895ac3e0e6 # v16
+        uses: mamba-org/setup-micromamba@0dea6379afdaffa5d528b3d1dabc45da37f443fc # v2.0.4
+        with:
+          environment-file: environment.yml
       - name: Lint Conda Oci Mirror
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
           pre-commit run --all-files
 
@@ -34,9 +36,11 @@ jobs:
     steps:
       - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v3
       - name: Install Conda environment from environment.yml
-        uses: mamba-org/provision-with-micromamba@3c96c0c27676490c63c18bc81f5c51895ac3e0e6 # v16
+        uses: mamba-org/setup-micromamba@0dea6379afdaffa5d528b3d1dabc45da37f443fc # v2.0.4
+        with:
+          environment-file: environment.yml
       - name: Test Conda OCI Mirror
-        shell: bash -l {0}
+        shell: bash -el {0}
         env:
           registry_host: http://localhost
           registry_port: ${{ job.services.registry.ports[5000] }}
@@ -70,15 +74,17 @@ jobs:
     steps:
       - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v3
       - name: Install Conda environment from environment.yml
-        uses: mamba-org/provision-with-micromamba@3c96c0c27676490c63c18bc81f5c51895ac3e0e6 # v16
+        uses: mamba-org/setup-micromamba@0dea6379afdaffa5d528b3d1dabc45da37f443fc # v2.0.4
+        with:
+          environment-file: environment.yml
       - name: Install Conda Oci Mirror
-        shell: bash -l {0}
+        shell: bash -el {0}
         run: |
           micromamba install conda-build
           pip install -e .
 
       - name: Test Conda Oci Mirror
-        shell: bash -l {0}
+        shell: bash -el {0}
         env:
           channel: conda-forge
           subdir: ${{ matrix.subdir }}
