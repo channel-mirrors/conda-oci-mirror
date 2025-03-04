@@ -3,9 +3,12 @@
 import os
 import sys
 import tarfile
+from pathlib import Path
+
+import pytest
 
 from conda_oci_mirror.logger import setup_logger
-from conda_oci_mirror.repo import PackageRepo
+from conda_oci_mirror.repo import PackageRepo, RepoData
 
 # Ensure we see all verbosity
 setup_logger(debug=True, quiet=False)
@@ -16,6 +19,17 @@ here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.dirname(os.path.dirname(here))
 sys.path.insert(0, root)
 sys.path.insert(0, here)
+
+
+class TestRepoData:
+    @pytest.fixture
+    def repo_data(self) -> RepoData:
+        test_repodata_file = Path(__file__).parent / "test_repodata.json"
+        repodata = RepoData(test_repodata_file)
+        return repodata
+
+    def test_get_latest_tag(self, repo_data):
+        assert repo_data.get_latest_tag("pytest") == "7.2.0-py310hbbe02a8_1"
 
 
 def test_package_repo(mirror_instance):
