@@ -10,9 +10,9 @@ jobs:
   linting:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v3
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v3
       - name: Check Spelling
-        uses: crate-ci/typos@d503507db9c5d116c79135435b149cd0f27d726e # v1.21.0
+        uses: crate-ci/typos@72f3776b6edc3a10a567b8e43fd0524b2a3f1419 # v1.30.1
         with:
           files: ./README.md
       - name: Install Conda environment from environment.yml
@@ -34,7 +34,7 @@ jobs:
         ports:
           - 5000:5000
     steps:
-      - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v3
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v3
       - name: Install Conda environment from environment.yml
         uses: mamba-org/setup-micromamba@0dea6379afdaffa5d528b3d1dabc45da37f443fc # v2.0.4
         with:
@@ -72,7 +72,7 @@ jobs:
           - noarch
       fail-fast: true
     steps:
-      - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v3
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v3
       - name: Install Conda environment from environment.yml
         uses: mamba-org/setup-micromamba@0dea6379afdaffa5d528b3d1dabc45da37f443fc # v2.0.4
         with:
