@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v3
       - name: Check Spelling
-        uses: crate-ci/typos@72f3776b6edc3a10a567b8e43fd0524b2a3f1419 # v1.30.1
+        uses: crate-ci/typos@b1a1ef3893ff35ade0cfa71523852a49bfd05d19 # v1.31.1
         with:
           files: ./README.md
       - name: Install Conda environment from environment.yml
