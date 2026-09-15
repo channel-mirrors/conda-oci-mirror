@@ -1,12 +1,18 @@
 #!/usr/bin/python
 
+import hashlib
+import json
 import os
 import sys
 import tarfile
 from pathlib import Path
 
+import msgpack
 import pytest
+import zstandard as zstd
 
+import conda_oci_mirror.defaults as defaults
+import conda_oci_mirror.repo as repository
 from conda_oci_mirror.logger import setup_logger
 from conda_oci_mirror.repo import PackageRepo, RepoData
 
@@ -30,6 +36,67 @@ class TestRepoData:
 
     def test_get_latest_tag(self, repo_data):
         assert repo_data.get_latest_tag("pytest") == "7.2.0-py310hbbe02a8_1"
+
+
+def test_upload_publishes_shards_before_the_index(tmp_path, monkeypatch):
+    shard = b"shard"
+    digest = hashlib.sha256(shard).hexdigest()
+    shard_index = zstd.ZstdCompressor().compress(
+        msgpack.packb(
+            {
+                "info": {"base_url": "../packages/", "shards_base_url": "./shards/"},
+                "shards": {"demo": bytes.fromhex(digest)},
+            }
+        )
+    )
+
+    class Response:
+        def __init__(self, content, status_code=200):
+            self.content = content
+            self.status_code = status_code
+            self.text = content.decode() if content.startswith(b"{") else ""
+
+    def get(url, **_):
+        if url.endswith("repodata.json"):
+            return Response(json.dumps({"packages": {}, "packages.conda": {}}).encode())
+        if url.endswith("repodata_from_packages.json"):
+            return Response(b"{}")
+        if url.endswith("repodata_shards.msgpack.zst"):
+            return Response(shard_index)
+        if url.endswith(f"shards/{digest}.msgpack.zst"):
+            return Response(shard)
+        raise AssertionError(f"unexpected URL: {url}")
+
+    class Pusher:
+        def __init__(self, root, timestamp):
+            self.layers = []
+            self.created_at = "2026.01.02.03.04"
+
+        def add_layer(self, path, media_type, title=None):
+            self.layers.append({"path": path, "media_type": media_type, "title": title})
+
+        def push(self, uri):
+            return {"uri": uri, "layers": self.layers}
+
+    monkeypatch.setattr(repository.requests, "get", get)
+    monkeypatch.setattr(repository, "Pusher", Pusher)
+
+    repo = PackageRepo("test", "linux-64", tmp_path, registry="ghcr.io/example")
+    monkeypatch.setattr(repo, "get_existing_tags", lambda *_: [])
+    pushes = repo.upload(tmp_path)
+
+    assert pushes[0]["uri"] == f"ghcr.io/example/test/linux-64/shards:{digest}"
+    assert pushes[0]["layers"][0]["media_type"] == defaults.repodata_shard_media_type_v1
+    assert pushes[-1]["uri"] == "ghcr.io/example/test/linux-64/repodata.json:latest"
+    assert defaults.repodata_shards_media_type_v1 in {
+        layer["media_type"] for layer in pushes[-1]["layers"]
+    }
+    mirrored_index = msgpack.unpackb(
+        zstd.ZstdDecompressor().decompress(Path(repo.shard_index).read_bytes()),
+        raw=False,
+    )
+    assert mirrored_index["info"]["base_url"] == ""
+    assert mirrored_index["info"]["shards_base_url"] == "./shards/"
 
 
 def test_package_repo(mirror_instance):

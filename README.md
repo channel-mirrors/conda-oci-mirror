@@ -15,6 +15,22 @@ You must have control of the registry you intend to mirror to, meaning you can p
 When you do a mirror, the repodata.json is always pulled fresh, and any local changes you've made are
 over-written. We do this so the local cache is in sync with the remote.
 
+### OCI channel layout
+
+Package archives are stored by package name and version/build tag. Repository metadata is stored at:
+
+```text
+<registry>/<channel>/<subdir>/repodata.json:latest
+```
+
+That manifest contains `repodata.json`, `repodata.json.zst`, and, when the source channel provides it, `repodata_shards.msgpack.zst` as separate media-type layers. Content-addressed repodata shards are stored as:
+
+```text
+<registry>/<channel>/<subdir>/shards:<sha256>
+```
+
+Shards are mirrored only for complete channel mirrors. A package-filtered mirror cannot publish the upstream shard index because it would reference packages that were not mirrored.
+
 ### Pull Cache
 
 A **pull-cache** can pull from a registry that you may not be able to write to, to your local cache.

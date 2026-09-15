@@ -70,7 +70,6 @@ class Mirror:
 
         # Ensure the oras registry is set to insecure or not based on host
         # We don't currently expose this to the cli as it's generally discouraged
-        global oras
         insecure = True if self.registry.startswith("http://") else insecure
         if insecure:
             oras.set_insecure()
@@ -116,7 +115,11 @@ class Mirror:
 
         for subdir, cache_dir in self.iter_subdirs():
             repo = repository.PackageRepo(
-                self.channel, subdir, cache_dir, self.registry
+                self.channel,
+                subdir,
+                cache_dir,
+                self.registry,
+                mirror_shards=not self.packages,
             )
 
             # Run filter based on packages we are looking for, and forbidden
