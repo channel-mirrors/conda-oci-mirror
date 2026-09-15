@@ -30,6 +30,7 @@ dependencies = [
     "conda-package-handling",
     "zstandard",
     "packaging",
+    "msgpack",
 ]
 
 dynamic = ["version"]

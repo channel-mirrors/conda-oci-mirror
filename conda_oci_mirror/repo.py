@@ -4,7 +4,9 @@ import datetime
 import fnmatch
 import os
 import tarfile
+from urllib.parse import urljoin
 
+import msgpack
 import packaging.version
 import requests
 import zstandard as zstd
@@ -145,17 +147,17 @@ class PackageRepo:
     Note that a PackageRepo can be used as the previous "SubdirAccessor"
     """
 
-    def __init__(self, channel, subdir, cache_dir, registry=None):
+    def __init__(self, channel, subdir, cache_dir, registry=None, mirror_shards=True):
         self.channel = channel
         self.subdir = subdir
         self.cache_dir = cache_dir or defaults.CACHE_DIR
         self.timestamp = None
+        self.mirror_shards = mirror_shards
 
         # Can be over-ridden by upload/tags/packages functions if desired
         self.registry = registry
 
         # Should the registry requests use http or https?
-        global oras
         insecure = True if self.registry.startswith("http://") else False
         if insecure:
             oras.set_insecure()
@@ -170,6 +172,14 @@ class PackageRepo:
         Repository metadata plus packages yanked.
         """
         return os.path.join(self.cache_dir, "repodata_from_packages.json")
+
+    @property
+    def shard_index(self):
+        return os.path.join(self.cache_dir, "repodata_shards.msgpack.zst")
+
+    @property
+    def shards_dir(self):
+        return os.path.join(self.cache_dir, "shards")
 
     @property
     def name(self):
@@ -262,7 +272,90 @@ class PackageRepo:
             util.write_file(patches.text, self.patches)
         if repodata.status_code == 200:
             util.write_file(repodata.text, self.repodata)
+        self.ensure_sharded_repodata()
         self.ensure_timestamp()
+
+    def ensure_sharded_repodata(self):
+        """Download the shard index and every content-addressed shard it references."""
+        if not self.mirror_shards:
+            return []
+
+        base_url = f"https://conda.anaconda.org/{self.channel}/{self.subdir}"
+        response = requests.get(f"{base_url}/repodata_shards.msgpack.zst")
+        if response.status_code != 200:
+            if os.path.exists(self.shard_index):
+                os.remove(self.shard_index)
+            return []
+
+        util.mkdir_p(self.shards_dir)
+        index = msgpack.unpackb(
+            zstd.ZstdDecompressor().decompress(response.content), raw=False
+        )
+        source_shards_url = urljoin(
+            f"{base_url}/", index["info"].get("shards_base_url", "")
+        )
+        digests = sorted(
+            digest if isinstance(digest, str) else bytes(digest).hex()
+            for digest in set(index["shards"].values())
+        )
+        for digest in digests:
+            shard_path = os.path.join(self.shards_dir, f"{digest}.msgpack.zst")
+            if os.path.exists(shard_path) and util.sha256sum(shard_path) == digest:
+                continue
+            shard = requests.get(
+                urljoin(f"{source_shards_url.rstrip('/')}/", f"{digest}.msgpack.zst")
+            )
+            if shard.status_code != 200:
+                raise ValueError(f"Cannot retrieve repodata shard {digest}")
+            with open(shard_path, "wb") as shard_file:
+                shard_file.write(shard.content)
+            if util.sha256sum(shard_path) != digest:
+                raise ValueError(f"Repodata shard {digest} has an unexpected digest")
+
+        # OCI uses a single `shards` repository instead of mirroring the source
+        # server's physical paths. Package and shard URLs must remain relative
+        # to the OCI channel selected by rattler.
+        index["info"]["base_url"] = ""
+        index["info"]["shards_base_url"] = "./shards/"
+        with open(self.shard_index, "wb") as index_file:
+            index_file.write(
+                zstd.ZstdCompressor().compress(msgpack.packb(index, use_bin_type=True))
+            )
+        return digests
+
+    def upload_shards(self, root, registry):
+        """Push immutable shards before publishing the index that references them."""
+        if not self.mirror_shards or not os.path.exists(self.shard_index):
+            return []
+
+        with open(self.shard_index, "rb") as index_file:
+            index = msgpack.unpackb(
+                zstd.ZstdDecompressor().decompress(index_file.read()), raw=False
+            )
+        digests = sorted(
+            digest if isinstance(digest, str) else bytes(digest).hex()
+            for digest in set(index["shards"].values())
+        )
+        pushes = []
+        uri = f"{registry}/{self.channel}/{self.subdir}/shards"
+        try:
+            existing_digests = set(oras.get_tags(uri, N=100_000_000))
+        except (TypeError, ValueError):
+            existing_digests = set()
+        # ponytail: shard transfer is serial; use TaskRunner if initial mirror
+        # throughput becomes a problem.
+        for digest in digests:
+            if digest in existing_digests:
+                continue
+            shard_path = os.path.join(self.shards_dir, f"{digest}.msgpack.zst")
+            pusher = Pusher(root, self.timestamp)
+            pusher.add_layer(
+                shard_path,
+                defaults.repodata_shard_media_type_v1,
+                os.path.relpath(shard_path, root),
+            )
+            pushes.append(pusher.push(f"{uri}:{digest}"))
+        return pushes
 
     def upload(self, root, registry=None):
         """
@@ -270,7 +363,7 @@ class PackageRepo:
         """
         registry = registry or self.registry
         self.ensure_repodata()
-        pushes = []
+        pushes = self.upload_shards(root, registry)
 
         # title is used for archive name (path extracted to) so relative to root
         # note that we upload repodata.json here, not the one with yanked packages
@@ -286,6 +379,13 @@ class PackageRepo:
         # compress repodata with zstd
         compressed = self.compress_repodata()
         pusher.add_layer(compressed, defaults.repodata_media_type_v1_zst, title)
+
+        if self.mirror_shards and os.path.exists(self.shard_index):
+            pusher.add_layer(
+                self.shard_index,
+                defaults.repodata_shards_media_type_v1,
+                os.path.relpath(self.shard_index, root),
+            )
 
         # Push for a tag for the date, and latest
         for tag in pusher.created_at, "latest":

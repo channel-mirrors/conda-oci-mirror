@@ -22,6 +22,10 @@ def check_media_type(layer):
         assert layer["media_type"] == defaults.repodata_media_type_v1
     elif layer["path"].endswith("repodata.json.zst"):
         assert layer["media_type"] == defaults.repodata_media_type_v1_zst
+    elif layer["path"].endswith("repodata_shards.msgpack.zst"):
+        assert layer["media_type"] == defaults.repodata_shards_media_type_v1
+    elif "/shards/" in str(layer["path"]):
+        assert layer["media_type"] == defaults.repodata_shard_media_type_v1
     elif layer["path"].endswith("conda"):
         assert layer["media_type"] == defaults.package_conda_media_type
     elif layer["path"].endswith("bz2"):
