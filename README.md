@@ -27,6 +27,24 @@ operation; `PackageRepo.find_packages()` also exposes its scan errors via `repo.
 This does not rename packages or remove entries from the upstream repodata snapshot: a run with
 skipped packages is incomplete, not a successful full mirror. No GitHub issues are created automatically.
 
+### OCI channel layout
+
+Package archives are stored by package name and version/build tag. Repository metadata is stored at:
+
+```text
+<registry>/<channel>/<subdir>/repodata.json:latest
+```
+
+That manifest contains `repodata.json`, `repodata.json.zst`, and, when the source channel provides it, `repodata_shards.msgpack.zst` as separate media-type layers. Content-addressed repodata shards are stored as:
+
+```text
+<registry>/<channel>/<subdir>/shards:<sha256>
+```
+
+Shards are pushed before the index that references them. Each run compares the upstream index with the one published at `repodata.json:latest` and only downloads and pushes shards the published index does not already reference, so the registry's tags are never listed.
+
+Shards are mirrored only for complete channel mirrors. A package-filtered mirror cannot publish the upstream shard index because it would reference packages that were not mirrored.
+
 ### Pull Cache
 
 A **pull-cache** can pull from a registry that you may not be able to write to, to your local cache.

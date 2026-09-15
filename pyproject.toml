@@ -29,6 +29,7 @@ dependencies = [
     "conda-package-handling",
     "zstandard",
     "py-rattler>=0.15",
+    "msgpack",
 ]
 
 dynamic = ["version"]

@@ -3,7 +3,10 @@
 import datetime
 import os
 import tarfile
+import tempfile
+from urllib.parse import urljoin
 
+import msgpack
 import requests
 import zstandard as zstd
 from rattler import Version
@@ -139,6 +142,17 @@ class RepoData:
             return f"{latest['version']}-{latest['build']}"
 
 
+def read_shard_index(content):
+    return msgpack.unpackb(zstd.ZstdDecompressor().decompress(content), raw=False)
+
+
+def shard_digests(index):
+    return {
+        digest if isinstance(digest, str) else bytes(digest).hex()
+        for digest in index["shards"].values()
+    }
+
+
 class PackageRepo:
     """
     A package repository manages a conda package repository.
@@ -146,7 +160,9 @@ class PackageRepo:
     Note that a PackageRepo can be used as the previous "SubdirAccessor"
     """
 
-    def __init__(self, channel, subdir, cache_dir, registry=None, client=None):
+    def __init__(
+        self, channel, subdir, cache_dir, registry=None, client=None, mirror_shards=True
+    ):
         self.channel = channel
         self.subdir = subdir
         self.cache_dir = cache_dir or defaults.CACHE_DIR
@@ -155,6 +171,8 @@ class PackageRepo:
         self._existing_manifests = {}
         self.new_archives = set()
         self.errors = []
+        self.mirror_shards = mirror_shards
+        self.source_shards_url = None
 
         # Can be over-ridden by upload/tags/packages functions if desired
         self.client = client or get_oras_client(registry)
@@ -170,6 +188,14 @@ class PackageRepo:
         Repository metadata plus packages yanked.
         """
         return os.path.join(self.cache_dir, "repodata_from_packages.json")
+
+    @property
+    def shard_index(self):
+        return os.path.join(self.cache_dir, "repodata_shards.msgpack.zst")
+
+    @property
+    def shards_dir(self):
+        return os.path.join(self.cache_dir, "shards")
 
     @property
     def name(self):
@@ -277,7 +303,106 @@ class PackageRepo:
             patches.json()
             util.write_file(patches.text, self.patches)
         util.write_file(repodata.text, self.repodata)
+        self.ensure_sharded_repodata()
         self.ensure_timestamp()
+
+    def ensure_sharded_repodata(self):
+        """
+        Download the shard index and rewrite its base URLs for the OCI layout.
+
+        Shards themselves are fetched in upload_shards, and only when they are
+        not already referenced by the published index.
+        """
+        if not self.mirror_shards:
+            return
+        base_url = f"https://conda.anaconda.org/{self.channel}/{self.subdir}"
+        response = requests.get(
+            f"{base_url}/repodata_shards.msgpack.zst", allow_redirects=True, timeout=60
+        )
+        if response.status_code == 404:
+            if os.path.exists(self.shard_index):
+                os.remove(self.shard_index)
+            return
+        response.raise_for_status()
+
+        index = read_shard_index(response.content)
+        self.source_shards_url = urljoin(
+            f"{base_url}/", index["info"].get("shards_base_url", "")
+        )
+
+        # OCI uses a single `shards` repository instead of mirroring the source
+        # server's physical paths. Package and shard URLs must remain relative
+        # to the OCI channel selected by rattler.
+        index["info"]["base_url"] = ""
+        index["info"]["shards_base_url"] = "./shards/"
+        with open(self.shard_index, "wb") as index_file:
+            index_file.write(
+                zstd.ZstdCompressor().compress(msgpack.packb(index, use_bin_type=True))
+            )
+
+    def get_published_shard_digests(self, registry, client):
+        """
+        Digests referenced by the published shard index.
+
+        Shards are pushed before the index that references them, so these are
+        known to exist and never need to be listed or pushed again.
+        """
+        uri = f"{registry}/{self.channel}/{self.subdir}/repodata.json:latest"
+        manifest = client.get_optional_manifest(uri) or {}
+        for layer in manifest.get("layers", []):
+            if layer["mediaType"] != defaults.repodata_shards_media_type_v1:
+                continue
+            with tempfile.TemporaryDirectory() as tmp:
+                path = client.download_blob(
+                    uri, layer["digest"], os.path.join(tmp, "index")
+                )
+                with open(path, "rb") as index_file:
+                    return shard_digests(read_shard_index(index_file.read()))
+        return set()
+
+    def download_shard(self, digest):
+        shard_path = os.path.join(self.shards_dir, f"{digest}.msgpack.zst")
+        if os.path.exists(shard_path) and util.sha256sum(shard_path) == digest:
+            return shard_path
+        util.mkdir_p(self.shards_dir)
+        response = requests.get(
+            urljoin(f"{self.source_shards_url.rstrip('/')}/", f"{digest}.msgpack.zst"),
+            allow_redirects=True,
+            timeout=60,
+        )
+        response.raise_for_status()
+        with open(shard_path, "wb") as shard_file:
+            shard_file.write(response.content)
+        if util.sha256sum(shard_path) != digest:
+            raise ValueError(f"Repodata shard {digest} has an unexpected digest")
+        return shard_path
+
+    def upload_shards(self, root, registry, client):
+        """Push new immutable shards before publishing the index that references them."""
+        if not self.mirror_shards or not os.path.exists(self.shard_index):
+            return []
+
+        with open(self.shard_index, "rb") as index_file:
+            digests = shard_digests(read_shard_index(index_file.read()))
+        new_digests = sorted(
+            digests - self.get_published_shard_digests(registry, client)
+        )
+        logger.info(f"  {len(new_digests)} of {len(digests)} repodata shards are new")
+
+        pushes = []
+        uri = f"{registry}/{self.channel}/{self.subdir}/shards"
+        # ponytail: shard transfer is serial; use TaskRunner if initial mirror
+        # throughput becomes a problem.
+        for digest in new_digests:
+            shard_path = self.download_shard(digest)
+            pusher = Pusher(root, self.timestamp, client=client)
+            pusher.add_layer(
+                shard_path,
+                defaults.repodata_shard_media_type_v1,
+                os.path.relpath(shard_path, root),
+            )
+            pushes.append(pusher.push(f"{uri}:{digest}"))
+        return pushes
 
     def upload(self, root, registry=None):
         """
@@ -288,7 +413,7 @@ class PackageRepo:
         registry = registry_name(registry)
         if self.timestamp is None:
             self.ensure_repodata()
-        pushes = []
+        pushes = self.upload_shards(root, registry, client)
 
         # title is used for archive name (path extracted to) so relative to root
         # note that we upload repodata.json here, not the one with yanked packages
@@ -306,6 +431,13 @@ class PackageRepo:
         pusher.add_layer(
             compressed, defaults.repodata_media_type_v1_zst, title + ".zst"
         )
+
+        if self.mirror_shards and os.path.exists(self.shard_index):
+            pusher.add_layer(
+                self.shard_index,
+                defaults.repodata_shards_media_type_v1,
+                os.path.relpath(self.shard_index, root),
+            )
 
         # Push for a tag for the date, and latest
         for tag in pusher.created_at, "latest":
