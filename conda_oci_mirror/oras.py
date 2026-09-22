@@ -1,24 +1,46 @@
 import datetime
 import os
 import tempfile
+from urllib.parse import urlsplit
 
 import oras as oraslib
 import oras.defaults
 import oras.oci
 import oras.provider
+import requests
 from oras.decorator import ensure_container
 
+import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.util as util
 from conda_oci_mirror.logger import logger
 
 
-def get_oras_client():
-    """
-    Consistent method to get an oras client
-    """
+def registry_name(registry):
+    """Strip transport from an OCI reference prefix, retaining its namespace."""
+    return registry.split("://", 1)[-1].rstrip("/") if registry else registry
+
+
+def get_oras_client(registry=None, insecure=False):
+    """Create an independent client with explicit transport and current credentials."""
+    target = registry or ""
+    parsed = urlsplit(target if "://" in target else "https://" + target)
+    if any(
+        (
+            parsed.scheme not in ("http", "https"),
+            parsed.username is not None,
+            parsed.password is not None,
+            parsed.query,
+            parsed.fragment,
+        )
+    ):
+        raise ValueError(
+            "Registry must be an HTTP(S) host/namespace without URL credentials, query or fragment"
+        )
     user = os.environ.get("ORAS_USER")
     password = os.environ.get("ORAS_PASS")
-    reg = Registry()
+    reg = Registry(
+        hostname=parsed.netloc or None, insecure=insecure or parsed.scheme == "http"
+    )
     if user and password:
         logger.info("Found username and password for basic auth")
         reg.set_basic_auth(user, password)
@@ -34,7 +56,9 @@ class Pusher:
     Class to handle layers and pushing with oras
     """
 
-    def __init__(self, root, timestamp=None):
+    def __init__(self, root, timestamp=None, client=None, preserve_existing=True):
+        self.preserve_existing = preserve_existing
+        self.client = client
         self.root = root
         self.layers = []
         self.timestamp = timestamp or datetime.datetime.now()
@@ -68,7 +92,7 @@ class Pusher:
         annotations.update({"creationTime": self.created_at})
         self.layers.append(
             {
-                "path": path,
+                "path": os.path.abspath(path),
                 "title": title,
                 "media_type": media_type,
                 "annotations": annotations,
@@ -82,15 +106,47 @@ class Pusher:
         # Add some custom annotations!
         logger.debug(f"⭐️ Pushing {uri}: {self.created_at}")
 
-        # The context should be the file root
-        with oraslib.utils.workdir(self.root):
-            oras.push(uri, self.layers)
+        client = self.client or get_oras_client(uri)
+        client.push(uri, self.layers, preserve_existing=self.preserve_existing)
 
         # Return lookup with URI and layers
         return {"uri": uri, "layers": self.layers}
 
 
 class Registry(oras.provider.Registry):
+    @property
+    def session(self):
+        # Each worker owns its connection pool, even when created with fork.
+        if self._session is None or self._session_pid != os.getpid():
+            if self._session is not None:
+                self._session.close()
+            self.session = requests.Session()
+        return self._session
+
+    @session.setter
+    def session(self, session):
+        self._session = session
+        self._session_pid = os.getpid()
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_session"] = None
+        state["_session_pid"] = None
+        return state
+
+    def _check_200_response(self, response):
+        response.raise_for_status()
+        return super()._check_200_response(response)
+
+    @ensure_container
+    def get_optional_manifest(self, container):
+        try:
+            return self.get_manifest(container)
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                return None
+            raise
+
     def set_insecure(self):
         """
         Change the prefix used (http/https) based on user preference.
@@ -151,7 +207,7 @@ class Registry(oras.provider.Registry):
         return paths
 
     @ensure_container
-    def push(self, container, archives: list):
+    def push(self, container, archives: list, preserve_existing=True):
         """
         Given a dict of layers (paths and corresponding mediaType) push.
         """
@@ -198,6 +254,23 @@ class Registry(oras.provider.Registry):
             if cleanup_blob and os.path.exists(blob):
                 os.remove(blob)
 
+        # A package tag may contain both archive formats. Preserve the other one
+        # by reusing its descriptor; no blob download or re-upload is needed.
+        package_types = {
+            defaults.package_conda_media_type,
+            defaults.package_tarbz2_media_type,
+        }
+        uploaded_types = {layer["mediaType"] for layer in manifest["layers"]}
+        if preserve_existing and uploaded_types & package_types:
+            previous = self.get_optional_manifest(container)
+            if previous:
+                keep = package_types - uploaded_types
+                manifest["layers"].extend(
+                    layer
+                    for layer in previous.get("layers", [])
+                    if layer["mediaType"] in keep
+                )
+
         # Prepare manifest and config
         # Note that we don't add annotations, etc. here
         conf, config_file = oraslib.oci.ManifestConfig()
@@ -213,5 +286,5 @@ class Registry(oras.provider.Registry):
         return response
 
 
-# Create global oras client to manage mirrors
+# Backward-compatible standalone client; mirror operations never use or mutate it.
 oras = get_oras_client()

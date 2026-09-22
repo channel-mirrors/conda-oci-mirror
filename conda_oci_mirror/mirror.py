@@ -11,7 +11,7 @@ import conda_oci_mirror.repo as repository
 import conda_oci_mirror.tasks as tasks
 import conda_oci_mirror.util as util
 from conda_oci_mirror.logger import logger
-from conda_oci_mirror.oras import oras
+from conda_oci_mirror.oras import get_oras_client, registry_name
 
 
 def get_forbidden_packages():
@@ -52,21 +52,13 @@ class Mirror:
         # We should not need to specify them on init.
 
         # Default mirrors are here
-        self.registry = registry or "ghcr.io/channel-mirrors"
-        self.registry = self.registry.rstrip("/")
+        registry = registry or "ghcr.io/channel-mirrors"
+        self.client = get_oras_client(registry, insecure=insecure)
+        self.registry = registry_name(registry)
 
         self.cache_dir = os.path.abspath(cache_dir or defaults.CACHE_DIR)
         self.quiet = quiet
         self.announce()
-
-        # Ensure the oras registry is set to insecure or not based on host
-        # We don't currently expose this to the cli as it's generally discouraged
-        insecure = True if self.registry.startswith("http://") else insecure
-        if insecure:
-            oras.set_insecure()
-
-        if "://" in self.registry:
-            self.registry = self.registry.split("://")[1]
 
         # Set listing of (undistributable) packages to skip
         self.skip_packages = (
@@ -100,14 +92,14 @@ class Mirror:
         repo_runner = tasks.TaskRunner(workers=self.workers)
 
         # If they think they are pushing but no auth, they are not :)
-        if not oras.has_auth and dry_run is False:
+        if not self.client.has_auth and dry_run is False:
             logger.warning(
                 "ORAS is not authenticated, if you registry requires auth this will not work"
             )
 
         for subdir, cache_dir in self.iter_subdirs():
             repo = repository.PackageRepo(
-                self.channel, subdir, cache_dir, self.registry
+                self.channel, subdir, cache_dir, self.registry, client=self.client
             )
 
             # Run filter based on packages we are looking for, and forbidden
@@ -119,7 +111,14 @@ class Mirror:
                 # Add the new tasks to be run by the runner
                 # This will get mapped into a Package instance to interact with
                 task = pkg.Package(
-                    self.channel, subdir, package, cache_dir, self.registry, info=info
+                    self.channel,
+                    subdir,
+                    package,
+                    cache_dir,
+                    self.registry,
+                    info=info,
+                    client=self.client,
+                    new_tag=package in repo.new_archives,
                 )
                 runner.add_task(
                     tasks.PackageUploadTask(
@@ -169,7 +168,7 @@ class Mirror:
             # Create an empty repository data
             repodata = repository.RepoData()
 
-            index_files = oras.pull_by_media_type(
+            index_files = self.client.pull_by_media_type(
                 uri, cache_dir, defaults.repodata_media_type_v1
             )
             if not index_files:
@@ -186,7 +185,9 @@ class Mirror:
                 if dry_run:
                     logger.info(f"Would be pulling {reference}, but dry-run is set.")
                     continue
-                runner.add_task(tasks.DownloadTask(uri, cache_dir, media_type))
+                runner.add_task(
+                    tasks.DownloadTask(uri, cache_dir, media_type, client=self.client)
+                )
 
         if serial:
             return runner.run_serial()
@@ -248,6 +249,7 @@ class Mirror:
                     registry=self.registry,
                     existing_file=str(package_name),
                     timestamp=timestamp,
+                    client=self.client,
                 )
                 if not pkg.matches_package(task.package_name_bare, self.packages):
                     continue

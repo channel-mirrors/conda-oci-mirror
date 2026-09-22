@@ -16,7 +16,7 @@ import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.util as util
 from conda_oci_mirror.decorators import classretry, retry
 from conda_oci_mirror.logger import logger
-from conda_oci_mirror.oras import Pusher
+from conda_oci_mirror.oras import Pusher, get_oras_client, registry_name
 
 
 def matches_package(name, patterns):
@@ -105,19 +105,25 @@ class Package:
         info=None,
         existing_file=None,
         timestamp=None,
+        client=None,
+        new_tag=False,
     ):
         """
         Info is only required if the file does not exist yet.
+        new_tag is for mirror planning that just verified absence; independent
+        writers of the same registry tag must be excluded by the caller.
         """
         self.channel = channel
         self.subdir = subdir
         self.package = package
         self.package_info = info
         self.cache_dir = cache_dir
-        self.registry = registry
+        self.client = client or get_oras_client(registry)
+        self.registry = registry_name(registry)
         self._package_name = None
         self.file = existing_file
         self.timestamp = timestamp
+        self.new_tag = new_tag
 
     def ensure_file(self):
         """
@@ -218,7 +224,7 @@ class Package:
             extra_tags = set([extra_tags])
 
         with tempfile.TemporaryDirectory() as staging_dir:
-            pusher = Pusher(staging_dir, timestamp=timestamp)
+            pusher = Pusher(staging_dir, timestamp=timestamp, client=self.client)
             upload_files_path = pathlib.Path(staging_dir)
             shutil.copy(self.file, staging_dir)
 
@@ -278,6 +284,12 @@ class Package:
 
             # Push main tag and extras using the same spelling as registry reads.
             for tag in [self.tag] + list(extra_tags):
+                # Only the main tag can be known absent from mirror planning.
+                pusher.preserve_existing = not self.new_tag or tag != self.tag
+                # A failed response may still mean the registry committed the tag.
+                # Retries and later uploads must inspect it rather than assume absence.
+                if tag == self.tag:
+                    self.new_tag = False
                 reference = package_reference(name, tag)
                 uri = f"{self.registry}/{self.channel}/{self.subdir}/{reference}"
                 items.append(pusher.push(uri))

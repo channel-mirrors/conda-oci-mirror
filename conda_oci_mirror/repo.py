@@ -12,7 +12,7 @@ import conda_oci_mirror.decorators as decorators
 import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.util as util
 from conda_oci_mirror.logger import logger
-from conda_oci_mirror.oras import Pusher, oras
+from conda_oci_mirror.oras import Pusher, get_oras_client, registry_name
 from conda_oci_mirror.package import (
     matches_package,
     package_reference,
@@ -145,20 +145,18 @@ class PackageRepo:
     Note that a PackageRepo can be used as the previous "SubdirAccessor"
     """
 
-    def __init__(self, channel, subdir, cache_dir, registry=None):
+    def __init__(self, channel, subdir, cache_dir, registry=None, client=None):
         self.channel = channel
         self.subdir = subdir
         self.cache_dir = cache_dir or defaults.CACHE_DIR
         self.timestamp = None
         self._existing_tags = {}
+        self._existing_manifests = {}
+        self.new_archives = set()
 
         # Can be over-ridden by upload/tags/packages functions if desired
-        self.registry = registry
-
-        # Should the registry requests use http or https?
-        insecure = self.registry and self.registry.startswith("http://")
-        if insecure:
-            oras.set_insecure()
+        self.client = client or get_oras_client(registry)
+        self.registry = registry_name(registry)
 
     @property
     def repodata(self):
@@ -187,7 +185,7 @@ class PackageRepo:
         # We pull to the higher up cache directory, which should extract to cache
         # E.g., '/tmp/pytest-of-vanessa/pytest-19/test_package_repo_linux_64_0/cache
         # and we extract '<ditto>/cache/zlib-1.2.11-0/info/index.json
-        res = oras.pull_by_media_type(
+        res = self.client.pull_by_media_type(
             container, self.cache_dir, defaults.info_index_media_type
         )
         if not res:
@@ -206,7 +204,7 @@ class PackageRepo:
         container = (
             f"{self.registry}/{self.channel}/{self.subdir}/{package_reference(package)}"
         )
-        res = oras.pull_by_media_type(
+        res = self.client.pull_by_media_type(
             container, self.cache_dir, defaults.info_archive_media_type
         )
         if not res:
@@ -227,7 +225,7 @@ class PackageRepo:
         # Try for latest .conda version first
         res = None
         for _, media_type in package_extensions.items():
-            res = oras.pull_by_media_type(container, self.cache_dir, media_type)
+            res = self.client.pull_by_media_type(container, self.cache_dir, media_type)
             if res:
                 break
 
@@ -284,6 +282,8 @@ class PackageRepo:
         Publish the last loaded snapshot, downloading it if none has been loaded.
         """
         registry = registry or self.registry
+        client = self.client if registry == self.registry else get_oras_client(registry)
+        registry = registry_name(registry)
         if self.timestamp is None:
             self.ensure_repodata()
         pushes = []
@@ -296,7 +296,7 @@ class PackageRepo:
         uri = f"{registry}/{self.channel}/{self.subdir}/repodata.json"
 
         # Don't be pushy now, or actually, do :)
-        pusher = Pusher(root, self.timestamp)
+        pusher = Pusher(root, self.timestamp, client=client)
         pusher.add_layer(self.repodata, defaults.repodata_media_type_v1, title)
 
         # compress repodata with zstd
@@ -355,10 +355,11 @@ class PackageRepo:
         registry = registry or self.registry
         skips = skips or []
         self._existing_tags.clear()
+        self._existing_manifests.clear()
+        self.new_archives.clear()
         repodata = self.load_repodata(include_yanked)
 
-        # Look through package info for conda and regular packages
-        # These don't overlap, version wise, so it's safe to do.
+        # Most builds have one format; inspect layers when both formats are listed.
         for pkg, info in repodata.packages:
             # Case 1: we are given packages to filter to
             if not matches_package(info["name"], names):
@@ -368,19 +369,30 @@ class PackageRepo:
             if skips and info["name"] in skips:
                 continue
 
-            # Existing packages for this will depend on the extension
-            try:
-                existing_packages = self.get_existing_packages(
-                    info["name"],
-                    registry=registry,
-                    package_ext=repodata.get_package_extension(pkg),
-                )
-            except (ValueError, TypeError):
-                logger.warning(f"Package not yet in registry ({pkg})")
-                existing_packages = set()
-
-            # This check includes extension, so shouldn't be an issue
-            if pkg not in existing_packages:
+            ext = repodata.get_package_extension(pkg)
+            # ponytail: unique upstream formats use tag presence; full audits must
+            # verify layers with get_existing_packages(verify_media_type=True).
+            existing_packages = self.get_existing_packages(
+                info["name"],
+                registry=registry,
+                package_ext=ext,
+                verify_media_type=False,
+            )
+            exists = pkg in existing_packages
+            if not exists:
+                self.new_archives.add(pkg)
+            other_key, other_ext = (
+                ("packages", "tar.bz2")
+                if ext == "conda"
+                else ("packages.conda", "conda")
+            )
+            other_file = pkg[: -(len(ext) + 1)] + "." + other_ext
+            if exists and other_file in repodata.data.get(other_key, {}):
+                start = len(info["name"]) + 1
+                end = -(len(ext) + 1)
+                tag = pkg[start:end]
+                exists = self.has_package_format(info["name"], tag, ext, registry)
+            if not exists:
                 logger.info(f"Adding {pkg} to queue")
                 yield pkg, info
 
@@ -389,23 +401,49 @@ class PackageRepo:
         Get existing tags for a package name
         """
         registry = registry or self.registry
-
-        gh_name = (
-            f"{registry}/{self.channel}/{self.subdir}/{package_reference(package)}"
-        )
-        if gh_name not in self._existing_tags:
-            tags = oras.get_tags(gh_name, N=100_000_000)
+        client = self.client if registry == self.registry else get_oras_client(registry)
+        gh_name = f"{registry_name(registry)}/{self.channel}/{self.subdir}/{package_reference(package)}"
+        key = (client.prefix, gh_name)
+        if key not in self._existing_tags:
+            try:
+                tags = client.get_tags(gh_name, N=100_000_000)
+            except requests.HTTPError as exc:
+                if exc.response is None or exc.response.status_code != 404:
+                    raise
+                tags = []
             logger.info(f"Found {len(tags)} tags for {gh_name}")
-            self._existing_tags[gh_name] = [reverse_version_build_tag(t) for t in tags]
-        return self._existing_tags[gh_name]
+            self._existing_tags[key] = [reverse_version_build_tag(t) for t in tags]
+        return self._existing_tags[key]
 
-    def get_existing_packages(self, package, registry=None, package_ext="conda"):
+    def has_package_format(self, package, tag, package_ext, registry=None):
+        """Inspect one tag's descriptors without downloading package blobs."""
+        registry = registry or self.registry
+        client = self.client if registry == self.registry else get_oras_client(registry)
+        uri = f"{registry_name(registry)}/{self.channel}/{self.subdir}/{package_reference(package, tag)}"
+        key = (client.prefix, uri)
+        if key not in self._existing_manifests:
+            self._existing_manifests[key] = client.get_optional_manifest(uri)
+        manifest = self._existing_manifests[key] or {}
+        return any(
+            layer["mediaType"] == package_extensions[package_ext]
+            for layer in manifest.get("layers", [])
+        )
+
+    def get_existing_packages(
+        self, package, registry=None, package_ext="conda", verify_media_type=True
+    ):
         """
-        Get existing package files files for each tag
+        Get existing archives of one format, checking manifest layers by default.
 
-        The extension depends on whether the package is the new format
-        (.conda) vs old (tar.bz2)
+        verify_media_type=False is a tag-only estimate used by the mirror's fast
+        path. Full audits should keep the default; descriptors are cached per scan.
         """
         registry = registry or self.registry
         tags = self.get_existing_tags(package, registry=registry)
+        if verify_media_type:
+            tags = [
+                tag
+                for tag in tags
+                if self.has_package_format(package, tag, package_ext, registry)
+            ]
         return set(f"{package}-{tag}.{package_ext}" for tag in tags)

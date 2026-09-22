@@ -6,7 +6,7 @@ from click.testing import CliRunner
 
 from conda_oci_mirror.cli import main
 from conda_oci_mirror.mirror import Mirror
-from conda_oci_mirror.oras import oras
+from conda_oci_mirror.oras import Registry
 from conda_oci_mirror.repo import PackageRepo, RepoData
 from conda_oci_mirror.tasks import TaskRunner
 
@@ -120,31 +120,34 @@ def test_selection_agrees_across_operations(tmp_path, monkeypatch, patterns, exp
     monkeypatch.setattr(
         PackageRepo, "get_existing_packages", lambda *args, **kwargs: set()
     )
-    monkeypatch.setattr(oras, "pull_by_media_type", Mock(return_value=[str(index)]))
+    monkeypatch.setattr(Registry, "pull_by_media_type", Mock(return_value=[str(index)]))
     queued = []
 
     def capture(runner):
         queued.extend(runner.tasks)
         return []
 
+    def uploads():
+        return [task for group in queued for task in [group] + group.following]
+
     monkeypatch.setattr(TaskRunner, "run_serial", capture)
     mirror.update(dry_run=True, serial=True)
-    assert {task.pkg.package_info["name"] for task in queued} == expected
-    assert len(queued) == len(expected) + ("alpha" in expected)
+    assert {task.pkg.package_info["name"] for task in uploads()} == expected
+    assert len(uploads()) == len(expected) + ("alpha" in expected)
     queued.clear()
     mirror.pull_latest(serial=True)
     assert {task.uri.rsplit("/", 1)[-1].split(":")[0] for task in queued} == expected
     assert len(queued) == len(expected) + ("alpha" in expected)
     queued.clear()
     mirror.push_all(dry_run=True, serial=True)
-    assert {task.pkg.package_name_bare for task in queued} == expected
-    assert len(queued) == len(expected) + ("alpha" in expected)
+    assert {task.pkg.package_name_bare for task in uploads()} == expected
+    assert len(uploads()) == len(expected) + ("alpha" in expected)
 
     # No index: push_new must select the same archives, without changing them.
     index.unlink()
     queued.clear()
     mirror.push_new(dry_run=True, serial=True)
-    assert {task.pkg.package_name_bare for task in queued} == expected
+    assert {task.pkg.package_name_bare for task in uploads()} == expected
     assert {path: path.read_bytes() for path in directory.iterdir()} == {
         path: content for path, content in original.items() if path != index
     }
