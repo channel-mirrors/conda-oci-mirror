@@ -9,7 +9,7 @@ import zstandard
 
 from conda_oci_mirror import defaults, util
 from conda_oci_mirror.mirror import Mirror
-from conda_oci_mirror.oras import Pusher, Registry, oras
+from conda_oci_mirror.oras import Pusher, Registry
 from conda_oci_mirror.package import Package
 from conda_oci_mirror.repo import PackageRepo, RepoData
 from conda_oci_mirror.tasks import TaskBase
@@ -168,7 +168,7 @@ def test_missing_optional_metadata_does_not_reuse_stale_file(tmp_path, monkeypat
 
 def test_tag_cache_is_scoped_and_decodes_consistently(tmp_path, monkeypatch):
     get = Mock(return_value=["1.0__p__local-0"])
-    monkeypatch.setattr(oras, "get_tags", get)
+    monkeypatch.setattr(Registry, "get_tags", get)
     for channel, subdir in [
         ("test", "noarch"),
         ("other", "noarch"),
@@ -189,7 +189,7 @@ def test_new_scan_refreshes_tags(tmp_path, monkeypatch):
     data.data["packages"]["demo-1.0-0.tar.bz2"] = {"name": "demo"}
     monkeypatch.setattr(repo, "load_repodata", lambda *args: data)
     get = Mock(side_effect=[[], ["1.0-0"]])
-    monkeypatch.setattr(oras, "get_tags", get)
+    monkeypatch.setattr(Registry, "get_tags", get)
     assert len(list(repo.find_packages())) == 1
     assert list(repo.find_packages()) == []
     assert get.call_count == 2

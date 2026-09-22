@@ -7,7 +7,7 @@ import requests
 from click.testing import CliRunner
 
 from conda_oci_mirror.cli import main
-from conda_oci_mirror.oras import Registry, oras
+from conda_oci_mirror.oras import Registry
 from conda_oci_mirror.package import _download_file_once
 from conda_oci_mirror.tasks import DownloadTask, TaskBase
 
@@ -188,7 +188,7 @@ def test_unsafe_blob_path_is_rejected(tmp_path, monkeypatch, artifact):
 def test_download_task_reports_missing_or_failed_blobs(tmp_path, monkeypatch, error):
     monkeypatch.setattr(TaskBase, "wait", lambda *args: None)
     monkeypatch.setattr(
-        oras, "pull_by_media_type", Mock(return_value=[], side_effect=error)
+        Registry, "pull_by_media_type", Mock(return_value=[], side_effect=error)
     )
     with pytest.raises(requests.ConnectionError if error else ValueError):
         DownloadTask("example.com/test/demo:1", str(tmp_path), "test").run()
@@ -197,7 +197,7 @@ def test_download_task_reports_missing_or_failed_blobs(tmp_path, monkeypatch, er
 @pytest.mark.parametrize("error", [None, requests.HTTPError("unauthorized")])
 def test_pull_cli_fails_when_repodata_is_unavailable(tmp_path, monkeypatch, error):
     monkeypatch.setattr(
-        oras, "pull_by_media_type", Mock(return_value=[], side_effect=error)
+        Registry, "pull_by_media_type", Mock(return_value=[], side_effect=error)
     )
     result = CliRunner().invoke(
         main,

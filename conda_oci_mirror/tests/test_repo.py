@@ -61,7 +61,11 @@ def test_package_repo(mirror_instance):
 
         # Our package remote is "dinosaur" and not "conda-forge"
         repo = PackageRepo(
-            m.channel, subdir=subdir, cache_dir=m.cache_dir, registry=m.registry
+            m.channel,
+            subdir=subdir,
+            cache_dir=m.cache_dir,
+            registry=m.registry,
+            client=m.client,
         )
 
         # Should retrieve from
