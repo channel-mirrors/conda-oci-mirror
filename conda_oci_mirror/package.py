@@ -1,5 +1,6 @@
 # Packages and functions for them
 
+import fnmatch
 import hashlib
 import json
 import os
@@ -16,6 +17,15 @@ import conda_oci_mirror.util as util
 from conda_oci_mirror.decorators import classretry, retry
 from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import Pusher
+
+
+def matches_package(name, patterns):
+    """Match package names consistently across mirror, pull, and push."""
+    if isinstance(patterns, str):
+        patterns = [patterns]
+    return not patterns or any(
+        fnmatch.fnmatchcase(name, pattern) for pattern in patterns
+    )
 
 
 def check_checksum(path, package_dict):

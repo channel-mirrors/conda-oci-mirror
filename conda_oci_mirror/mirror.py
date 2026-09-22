@@ -45,7 +45,7 @@ class Mirror:
     ):
         self.channel = channel
         self.subdirs = subdirs or defaults.DEFAULT_SUBDIRS
-        self.packages = packages or []
+        self.packages = [packages] if isinstance(packages, str) else (packages or [])
         if "all" in self.packages:
             self.packages = []
         # TODO consider placing packages on level of functions
@@ -192,7 +192,7 @@ class Mirror:
                 media_type = repodata.get_package_mediatype(package_file)
 
                 # Skip those that aren't desired if a filter is given
-                if self.packages and package not in self.packages:
+                if not pkg.matches_package(package, self.packages):
                     continue
 
                 # The latest is determined by upload date
@@ -273,6 +273,8 @@ class Mirror:
                     existing_file=str(package_name),
                     timestamp=timestamp,
                 )
+                if not pkg.matches_package(task.package_name_bare, self.packages):
+                    continue
                 runner.add_task(
                     tasks.PackageUploadTask(
                         task, wait_time=self.timeout, dry_run=dry_run

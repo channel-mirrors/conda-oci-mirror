@@ -26,8 +26,8 @@ A **pull-cache** can pull from a registry that you may not be able to write to, 
 
 A **push-cache** can push your local cache to a registry you control. This means that we compare packages you've
 built against what are known in the repodata.json, and we push the ones that are not known to the repodata.json.
-A push cache with `--push-all true` will push the entire contents of the local cache to your registry, regardless of
-status. Cache pushes leave local archives and repodata unchanged, including during dry runs and failed uploads.
+A push cache with `--push-all` (also available as `--all`) will push all selected local packages to your registry,
+regardless of status. Cache pushes leave local archives and repodata unchanged, including during dry runs and failed uploads.
 They compare against the existing local repodata without running `conda index`.
 
 ## Usage
@@ -49,10 +49,9 @@ $ pip install -e .
 
 ### Authentication
 
-You'll need an `ORAS_USER` and `ORAS_PASS` in the environment to be able
-to push. You can also do a `--dry-run` to test out the library without pushing.
-If you leave out dry run but don't have credentials, it will automatically be switched
-to dry run.
+For registries that require authentication, set `ORAS_USER` and `ORAS_PASS` in the environment.
+Use `--dry-run` to test without pushing. Missing credentials do not enable dry-run automatically;
+anonymous writes are attempted and succeed only if the registry permits them.
 
 ```bash
 export ORAS_USER=myuser
@@ -61,6 +60,14 @@ export ORAS_PASS=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 Note that when you make the token, ensure the packages box (for read and write)
 is checked.
+
+### Shared options
+
+All commands accept repeatable `--package` names or glob patterns, such as `--package 'numpy*'`.
+Quote patterns to prevent shell expansion. `--push-all` includes already-indexed packages but still honors the package filter.
+`--quiet`, `--debug`, and `--push-all` are switches; do not append `true` or `false`.
+Workers must be positive. `--upload-delay` sets a nonnegative delay in milliseconds; `--timeout` remains an alias for it,
+not a network timeout. `--quiet` suppresses informational logs, not all progress output.
 
 ### Mirror
 
