@@ -6,6 +6,15 @@ import conda_oci_mirror.defaults as defaults
 from conda_oci_mirror.logger import setup_logger
 from conda_oci_mirror.mirror import Mirror
 
+
+def warn_skipped(m):
+    """Skipped invalid tags are upstream problems, so warn instead of failing."""
+    if m.errors:
+        click.echo(
+            f"Warning: skipped {len(m.errors)} invalid package tags; see warnings above.",
+            err=True,
+        )
+
 # The cache defaults to the present working directory
 default_cache = os.path.join(os.getcwd(), "cache")
 
@@ -90,10 +99,7 @@ def mirror(
         timeout=timeout,
     )
     m.update(dry_run)
-    if m.errors:
-        raise click.ClickException(
-            f"Skipped {len(m.errors)} invalid package tags; see errors above."
-        )
+    warn_skipped(m)
 
 
 @main.command()
@@ -127,10 +133,7 @@ def pull_cache(
         timeout=timeout,
     )
     m.pull_latest(dry_run)
-    if m.errors:
-        raise click.ClickException(
-            f"Skipped {len(m.errors)} invalid package tags; see errors above."
-        )
+    warn_skipped(m)
 
 
 @main.command()
@@ -171,7 +174,4 @@ def push_cache(
         m.push_all(dry_run)
     else:
         m.push_new(dry_run)
-    if m.errors:
-        raise click.ClickException(
-            f"Skipped {len(m.errors)} invalid package tags; see errors above."
-        )
+    warn_skipped(m)

@@ -96,7 +96,7 @@ def skip_invalid_tag(tag, source, errors):
         "digit or underscore. Fix/rebuild the upstream package."
     )
     errors.append(error)
-    logger.error(error)
+    logger.warning(error)
     return True
 
 

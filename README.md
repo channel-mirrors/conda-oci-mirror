@@ -20,9 +20,9 @@ Filtered mirrors still publish the full upstream repodata, not a filtered index.
 
 Packages whose encoded version/build cannot form a valid OCI tag (for example, build strings
 containing spaces or `*`, or tags longer than 128 characters) are skipped before package downloads
-or registry lookups for that archive. Each skip is logged as an error with the source archive and tag.
-Mirroring and cache operations continue with valid packages, then the CLI exits with status 1 if
-anything was skipped, including in dry runs. Python callers can inspect `mirror.errors` after each
+or registry lookups for that archive. Each skip is logged as a warning with the source archive and tag.
+Mirroring and cache operations continue with valid packages, and the CLI prints a summary warning
+but still exits with status 0. Python callers can inspect `mirror.errors` after each
 operation; `PackageRepo.find_packages()` also exposes its scan errors via `repo.errors`.
 This does not rename packages or remove entries from the upstream repodata snapshot: a run with
 skipped packages is incomplete, not a successful full mirror. No GitHub issues are created automatically.

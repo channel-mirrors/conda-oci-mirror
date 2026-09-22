@@ -133,16 +133,19 @@ def test_skip_bad_builds_but_finish_valid_work(
     result = CliRunner().invoke(
         main, [command, "--quiet"] + flags + (["--dry-run"] if dry_run else [])
     )
-    assert result.exit_code == 1, result.output
-    assert "Skipped 2 invalid package tags" in result.output
+    assert result.exit_code == 0, result.output
+    assert "skipped 2 invalid package tags" in result.output
     assert len(mirror.errors) == 2
     assert all(
         BAD_BUILD in error and "groundingdino-py-cuda" in error
         for error in mirror.errors
     )
-    assert (
-        len([record for record in caplog.records if record.levelname == "ERROR"]) == 2
-    )
+    skipped = [
+        record
+        for record in caplog.records
+        if record.levelname == "WARNING" and "invalid OCI tag" in record.getMessage()
+    ]
+    assert len(skipped) == 2
     assert all(path.read_bytes() == b"untouched archive" for path in bad_archives)
     if command == "pull-cache":
         assert completed == ([] if dry_run else ["pull", "pull"])
