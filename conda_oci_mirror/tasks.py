@@ -2,7 +2,7 @@ import multiprocessing as mp
 import time
 
 from conda_oci_mirror.oras import get_oras_client, registry_name
-from conda_oci_mirror.package import package_reference
+from conda_oci_mirror.package import package_reference, skip_invalid_tag
 
 # Counters for lifetime of tasks
 package_counter = mp.Value("i", 0)
@@ -143,11 +143,16 @@ class TaskRunner:
     def __init__(self, workers=1):
         self.workers = workers
         self.tasks = []
+        self.errors = []
         self._uploads = {}
 
     def add_task(self, task):
         if isinstance(task, PackageUploadTask):
             pkg = task.pkg
+            if skip_invalid_tag(
+                pkg.tag, f"{pkg.channel}/{pkg.subdir}/{pkg.package}", self.errors
+            ):
+                return
             key = (
                 pkg.client.prefix,
                 pkg.registry,
