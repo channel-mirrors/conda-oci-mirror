@@ -169,18 +169,13 @@ class Mirror:
             # Create an empty repository data
             repodata = repository.RepoData()
 
-            try:
-                # Retrieve a path to the index_file
-                index_file = oras.pull_by_media_type(
-                    uri, cache_dir, defaults.repodata_media_type_v1
-                )[0]
-                repodata.load(index_file)
-                logger.info(
-                    f"Found {len(repodata.package_archives)} packages from {uri}"
-                )
-
-            except Exception as e:
-                logger.warning(f"Issue retrieving uri: {uri}: {e}")
+            index_files = oras.pull_by_media_type(
+                uri, cache_dir, defaults.repodata_media_type_v1
+            )
+            if not index_files:
+                raise ValueError(f"No repodata layer found for {uri}")
+            repodata.load(index_files[0])
+            logger.info(f"Found {len(repodata.package_archives)} packages from {uri}")
 
             # Don't repeat requests for same uri and media type
             seen = set()

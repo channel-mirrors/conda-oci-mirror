@@ -21,6 +21,10 @@ Filtered mirrors still publish the full upstream repodata, not a filtered index.
 ### Pull Cache
 
 A **pull-cache** can pull from a registry that you may not be able to write to, to your local cache.
+Downloaded OCI layers are checked against their SHA-256 digests before replacing local files.
+Interrupted or invalid downloads leave an existing destination unchanged and remove temporary files.
+Missing metadata, missing requested package layers, and download failures cause the command to fail rather than silently succeed.
+Upstream package downloads also replace files atomically and verify checksums when repodata supplies them.
 
 ### Push Cache
 

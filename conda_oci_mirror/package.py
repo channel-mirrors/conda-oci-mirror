@@ -55,24 +55,21 @@ def check_checksum(path, package_dict):
 
 def _download_file_once(url, dest, checksum_content=None, chunk_size=8192):
     """
-    Stream download a file!
+    Download and validate before atomically replacing the destination.
     """
-    with requests.get(url, stream=True, allow_redirects=True) as r:
-        r.raise_for_status()
-        with open(dest, "wb") as f:
-            for chunk in r.iter_content(chunk_size=chunk_size):
-                f.write(chunk)
+    parent = os.path.dirname(os.path.abspath(dest))
+    os.makedirs(parent, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=parent) as staging_dir:
+        staged = os.path.join(staging_dir, "download")
+        with requests.get(url, stream=True, allow_redirects=True, timeout=60) as r:
+            r.raise_for_status()
+            with open(staged, "wb") as f:
+                for chunk in r.iter_content(chunk_size=chunk_size):
+                    f.write(chunk)
 
-    # If we aren't given a checksum, we're done!
-    if not checksum_content:
-        return dest
-
-    # Do a checksum validation if given one.
-    if check_checksum(dest, checksum_content) is False:
-        if os.path.exists(dest):
-            os.remove(dest)
-        raise RuntimeError("checksums wrong")
-
+        if checksum_content and not check_checksum(staged, checksum_content):
+            raise RuntimeError(f"Checksum mismatch downloading {url}")
+        os.replace(staged, dest)
     return dest
 
 
