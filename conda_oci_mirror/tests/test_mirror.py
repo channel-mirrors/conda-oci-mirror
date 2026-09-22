@@ -8,7 +8,6 @@ from conftest import check_media_type
 
 import conda_oci_mirror.repo as repository
 from conda_oci_mirror.logger import setup_logger
-from conda_oci_mirror.oras import oras
 
 # Ensure we see all verbosity
 setup_logger(debug=True, quiet=False)
@@ -42,6 +41,7 @@ def test_mirror(subdir, num_updates, package_name, mirror_instance):
     and checking file structure and/or size.
     """
     m = mirror_instance
+    oras = m.client
     assert m.subdirs == [subdir]
     cache_dir = m.cache_dir
     cache_subdir = os.path.join(cache_dir, m.channel, m.subdirs[0])

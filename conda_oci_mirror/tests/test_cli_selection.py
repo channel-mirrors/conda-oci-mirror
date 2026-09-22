@@ -6,7 +6,7 @@ from click.testing import CliRunner
 
 from conda_oci_mirror.cli import main
 from conda_oci_mirror.mirror import Mirror
-from conda_oci_mirror.oras import oras
+from conda_oci_mirror.oras import Registry
 from conda_oci_mirror.repo import PackageRepo, RepoData
 from conda_oci_mirror.tasks import TaskRunner
 
@@ -120,7 +120,7 @@ def test_selection_agrees_across_operations(tmp_path, monkeypatch, patterns, exp
     monkeypatch.setattr(
         PackageRepo, "get_existing_packages", lambda *args, **kwargs: set()
     )
-    monkeypatch.setattr(oras, "pull_by_media_type", Mock(return_value=[str(index)]))
+    monkeypatch.setattr(Registry, "pull_by_media_type", Mock(return_value=[str(index)]))
     queued = []
 
     def capture(runner):

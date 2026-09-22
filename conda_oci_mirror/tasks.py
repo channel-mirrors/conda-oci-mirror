@@ -1,7 +1,7 @@
 import multiprocessing as mp
 import time
 
-from conda_oci_mirror.oras import oras
+from conda_oci_mirror.oras import get_oras_client, registry_name
 
 # Counters for lifetime of tasks
 package_counter = mp.Value("i", 0)
@@ -106,8 +106,9 @@ class DownloadTask(TaskBase):
     A simple task to download a blob / media type
     """
 
-    def __init__(self, uri, cache_dir, media_type):
-        self.uri = uri
+    def __init__(self, uri, cache_dir, media_type, client=None):
+        self.client = client or get_oras_client(uri)
+        self.uri = registry_name(uri)
         self.cache_dir = cache_dir
         self.media_type = media_type
 
@@ -118,7 +119,9 @@ class DownloadTask(TaskBase):
         # Wait based on the last interaction time
         self.wait()
 
-        paths = oras.pull_by_media_type(self.uri, self.cache_dir, self.media_type)
+        paths = self.client.pull_by_media_type(
+            self.uri, self.cache_dir, self.media_type
+        )
         if not paths:
             raise ValueError(f"No {self.media_type} layer found for {self.uri}")
         return paths

@@ -12,7 +12,7 @@ import conda_oci_mirror.decorators as decorators
 import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.util as util
 from conda_oci_mirror.logger import logger
-from conda_oci_mirror.oras import Pusher, oras
+from conda_oci_mirror.oras import Pusher, get_oras_client, registry_name
 from conda_oci_mirror.package import (
     matches_package,
     package_reference,
@@ -145,7 +145,7 @@ class PackageRepo:
     Note that a PackageRepo can be used as the previous "SubdirAccessor"
     """
 
-    def __init__(self, channel, subdir, cache_dir, registry=None):
+    def __init__(self, channel, subdir, cache_dir, registry=None, client=None):
         self.channel = channel
         self.subdir = subdir
         self.cache_dir = cache_dir or defaults.CACHE_DIR
@@ -153,12 +153,8 @@ class PackageRepo:
         self._existing_tags = {}
 
         # Can be over-ridden by upload/tags/packages functions if desired
-        self.registry = registry
-
-        # Should the registry requests use http or https?
-        insecure = self.registry and self.registry.startswith("http://")
-        if insecure:
-            oras.set_insecure()
+        self.client = client or get_oras_client(registry)
+        self.registry = registry_name(registry)
 
     @property
     def repodata(self):
@@ -187,7 +183,7 @@ class PackageRepo:
         # We pull to the higher up cache directory, which should extract to cache
         # E.g., '/tmp/pytest-of-vanessa/pytest-19/test_package_repo_linux_64_0/cache
         # and we extract '<ditto>/cache/zlib-1.2.11-0/info/index.json
-        res = oras.pull_by_media_type(
+        res = self.client.pull_by_media_type(
             container, self.cache_dir, defaults.info_index_media_type
         )
         if not res:
@@ -206,7 +202,7 @@ class PackageRepo:
         container = (
             f"{self.registry}/{self.channel}/{self.subdir}/{package_reference(package)}"
         )
-        res = oras.pull_by_media_type(
+        res = self.client.pull_by_media_type(
             container, self.cache_dir, defaults.info_archive_media_type
         )
         if not res:
@@ -227,7 +223,7 @@ class PackageRepo:
         # Try for latest .conda version first
         res = None
         for _, media_type in package_extensions.items():
-            res = oras.pull_by_media_type(container, self.cache_dir, media_type)
+            res = self.client.pull_by_media_type(container, self.cache_dir, media_type)
             if res:
                 break
 
@@ -284,6 +280,8 @@ class PackageRepo:
         Publish the last loaded snapshot, downloading it if none has been loaded.
         """
         registry = registry or self.registry
+        client = self.client if registry == self.registry else get_oras_client(registry)
+        registry = registry_name(registry)
         if self.timestamp is None:
             self.ensure_repodata()
         pushes = []
@@ -296,7 +294,7 @@ class PackageRepo:
         uri = f"{registry}/{self.channel}/{self.subdir}/repodata.json"
 
         # Don't be pushy now, or actually, do :)
-        pusher = Pusher(root, self.timestamp)
+        pusher = Pusher(root, self.timestamp, client=client)
         pusher.add_layer(self.repodata, defaults.repodata_media_type_v1, title)
 
         # compress repodata with zstd
@@ -389,15 +387,14 @@ class PackageRepo:
         Get existing tags for a package name
         """
         registry = registry or self.registry
-
-        gh_name = (
-            f"{registry}/{self.channel}/{self.subdir}/{package_reference(package)}"
-        )
-        if gh_name not in self._existing_tags:
-            tags = oras.get_tags(gh_name, N=100_000_000)
+        client = self.client if registry == self.registry else get_oras_client(registry)
+        gh_name = f"{registry_name(registry)}/{self.channel}/{self.subdir}/{package_reference(package)}"
+        key = (client.prefix, gh_name)
+        if key not in self._existing_tags:
+            tags = client.get_tags(gh_name, N=100_000_000)
             logger.info(f"Found {len(tags)} tags for {gh_name}")
-            self._existing_tags[gh_name] = [reverse_version_build_tag(t) for t in tags]
-        return self._existing_tags[gh_name]
+            self._existing_tags[key] = [reverse_version_build_tag(t) for t in tags]
+        return self._existing_tags[key]
 
     def get_existing_packages(self, package, registry=None, package_ext="conda"):
         """

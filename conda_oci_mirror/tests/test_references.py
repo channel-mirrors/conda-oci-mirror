@@ -8,7 +8,7 @@ from rattler import Version
 
 from conda_oci_mirror import defaults
 from conda_oci_mirror.mirror import Mirror
-from conda_oci_mirror.oras import Pusher, oras
+from conda_oci_mirror.oras import Pusher, Registry
 from conda_oci_mirror.package import Package, package_reference
 from conda_oci_mirror.repo import PackageRepo, RepoData
 from conda_oci_mirror.tasks import TaskRunner
@@ -68,7 +68,7 @@ def test_upload_and_read_use_the_same_reference(tmp_path, monkeypatch):
     with tarfile.open(info, "w:gz"):
         pass
     pull = Mock(side_effect=[[str(index)], [str(info)], [str(archive)]])
-    monkeypatch.setattr(oras, "pull_by_media_type", pull)
+    monkeypatch.setattr(Registry, "pull_by_media_type", pull)
     raw = "_lib:1!2.0+local-build=1"
     assert repo.get_index_json(raw) == {}
     with repo.get_info(raw):
@@ -114,7 +114,7 @@ def test_latest_uses_conda_order_and_keeps_formats_separate(monkeypatch):
 def test_pull_schedules_only_latest_available_format(tmp_path, monkeypatch):
     index = tmp_path / "repodata.json"
     index.write_text(json.dumps(records().data))
-    monkeypatch.setattr(oras, "pull_by_media_type", Mock(return_value=[str(index)]))
+    monkeypatch.setattr(Registry, "pull_by_media_type", Mock(return_value=[str(index)]))
     queued = []
 
     def capture(runner):

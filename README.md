@@ -69,6 +69,12 @@ export ORAS_PASS=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
 Note that when you make the token, ensure the packages box (for read and write)
 is checked.
 
+Each `Mirror` owns an independent `client`, including its transport and credentials.
+Worker processes retain that configuration but create their own HTTP sessions.
+For standalone reads, pass the original registry URL (including `http://` for local registries),
+or pass `client=mirror.client` when constructing a `PackageRepo` from `mirror.registry`.
+The legacy global `oras` client remains available for direct callers but is not used by mirror operations.
+
 ### Shared options
 
 All commands accept repeatable `--package` names or glob patterns, such as `--package 'numpy*'`.
