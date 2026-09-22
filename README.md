@@ -23,8 +23,9 @@ A **pull-cache** can pull from a registry that you may not be able to write to, 
 
 A **push-cache** can push your local cache to a registry you control. This means that we compare packages you've
 built against what are known in the repodata.json, and we push the ones that are not known to the repodata.json.
-A push cache with the `--all` flag will push the entire contents of the local cache to your registry, regardless of
-status.
+A push cache with `--push-all true` will push the entire contents of the local cache to your registry, regardless of
+status. Cache pushes leave local archives and repodata unchanged, including during dry runs and failed uploads.
+They compare against the existing local repodata without running `conda index`.
 
 ## Usage
 

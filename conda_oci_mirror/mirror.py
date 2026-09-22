@@ -1,8 +1,6 @@
 import datetime
 import os
 import pathlib
-import shutil
-import subprocess
 
 import requests
 
@@ -26,13 +24,6 @@ def get_forbidden_packages():
             f"Cannot retrieve forbidden packages from {defaults.forbidden_package_url}"
         )
     return response.json()["undistributable"]
-
-
-def conda_index(cache_dir):
-    """
-    conda index to create updated repodata.json
-    """
-    subprocess.check_output(["conda", "index", str(cache_dir)])
 
 
 class Mirror:
@@ -70,7 +61,6 @@ class Mirror:
 
         # Ensure the oras registry is set to insecure or not based on host
         # We don't currently expose this to the cli as it's generally discouraged
-        global oras
         insecure = True if self.registry.startswith("http://") else insecure
         if insecure:
             oras.set_insecure()
@@ -132,7 +122,7 @@ class Mirror:
                 )
                 runner.add_task(
                     tasks.PackageUploadTask(
-                        task, wait_time=self.timeout, dry_run=dry_run
+                        task, wait_time=self.timeout, dry_run=dry_run, cleanup=True
                     )
                 )
 
@@ -250,28 +240,14 @@ class Mirror:
         pushes = []
 
         for subdir, cache_dir in self.iter_subdirs():
-            # Create a new task runner per subdir
-            # The reason is that we cleanup between them
             runner = tasks.TaskRunner(workers=self.workers)
 
-            # The channel cache is one level up from our subdir cache
-            channel_root = os.path.dirname(cache_dir)
-
-            # Backup the original repository data so we can index and replace it
-            backup_repodata = os.path.join(cache_dir, "original_repodata.json")
-            orig_repodata = os.path.join(cache_dir, "repodata.json")
-
-            # If we already have repository data, make a copy
-            if os.path.exists(orig_repodata):
-                shutil.copyfile(orig_repodata, backup_repodata)
-
-            # This nukes the repodata.json
-            conda_index(channel_root)
-
-            # Create new repodata or load existing from backup (before nuke)
+            # Compare against the existing index without modifying the cache.
             repodata = repository.RepoData()
-            if os.path.exists(backup_repodata):
-                repodata.load(backup_repodata)
+            repodata_file = os.path.join(cache_dir, "repodata.json")
+            if os.path.exists(repodata_file):
+                repodata.load(repodata_file)
+            known_archives = set(repodata.package_archives)
 
             # Include both conda and tar.bz2 extension
             new_packages = []
@@ -280,9 +256,7 @@ class Mirror:
                 if push_all:
                     new_packages += files
                 else:
-                    new_packages += [
-                        f for f in files if f.name not in repodata.package_archives
-                    ]
+                    new_packages += [f for f in files if f.name not in known_archives]
             logger.info(f"Found {len(new_packages)} packages")
 
             # Push with an updated timestamp
@@ -310,10 +284,5 @@ class Mirror:
                 pushes += runner.run_serial()
             else:
                 pushes += runner.run()
-
-            # If we cleanup, remove repodata.json and replace back with original
-            os.remove(orig_repodata)
-            if os.path.exists(backup_repodata):
-                shutil.move(backup_repodata, orig_repodata)
 
         return pushes
