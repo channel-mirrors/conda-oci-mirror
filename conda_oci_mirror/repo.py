@@ -1,7 +1,6 @@
 # Packages and functions for them
 
 import datetime
-import fnmatch
 import os
 import tarfile
 
@@ -14,7 +13,7 @@ import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.util as util
 from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import Pusher, oras
-from conda_oci_mirror.package import reverse_version_build_tag
+from conda_oci_mirror.package import matches_package, reverse_version_build_tag
 
 # Mapping of extensions to media types
 package_extensions = {
@@ -351,9 +350,8 @@ class PackageRepo:
         # These don't overlap, version wise, so it's safe to do.
         for pkg, info in repodata.packages:
             # Case 1: we are given packages to filter to
-            if names:
-                if not any(fnmatch.fnmatch(info["name"], x) for x in names):
-                    continue
+            if not matches_package(info["name"], names):
+                continue
 
             # Case 2: skip it entirely!
             if skips and info["name"] in skips:

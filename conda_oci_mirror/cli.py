@@ -17,17 +17,35 @@ def main():
 
 options = [
     click.option("-s", "--subdir", default=defaults.DEFAULT_SUBDIRS, multiple=True),
-    click.option("-p", "--package", help="Select packages", default=[], multiple=True),
+    click.option(
+        "-p",
+        "--package",
+        help="Package name or glob pattern (repeatable)",
+        default=[],
+        multiple=True,
+    ),
     click.option(
         "--registry", default=None, help="Registry URI (e.g., ghcr.io/username)"
     ),
     click.option("--dry-run/--no-dry-run", default=False, help="Dry run?"),
-    click.option("--workers", default=4, help="How many workers to use in parallel"),
-    click.option("--timeout", default=500, help="Timeout for requests in milliseconds"),
+    click.option(
+        "--workers",
+        default=4,
+        type=click.IntRange(min=1),
+        help="How many workers to use in parallel",
+    ),
+    click.option(
+        "--upload-delay",
+        "--timeout",
+        "timeout",
+        default=500,
+        type=click.IntRange(min=0),
+        help="Upload delay in milliseconds (not an HTTP timeout)",
+    ),
     click.option("--cache-dir", default=default_cache, help="Path to cache directory"),
     click.option("-c", "--channel", help="Select channel", default="conda-forge"),
-    click.option("--quiet", default=False, help="Do not print verbose output?"),
-    click.option("--debug", default=False, help="Print debug output?"),
+    click.option("--quiet", is_flag=True, help="Suppress informational logs"),
+    click.option("--debug", is_flag=True, help="Enable debug logging"),
 ]
 
 
@@ -109,7 +127,9 @@ def pull_cache(
 
 @main.command()
 @add_options(options)
-@click.option("--push-all", default=False, help="Push all local packages?")
+@click.option(
+    "--push-all", "--all", is_flag=True, help="Push all selected local packages"
+)
 def push_cache(
     channel,
     subdir,
