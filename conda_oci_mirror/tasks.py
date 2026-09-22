@@ -57,13 +57,14 @@ class RepoUploadTask(TaskBase):
 
 class PackageUploadTask(TaskBase):
     """
-    A single task to upload a package, and cleanup.
+    Upload a package, optionally cleaning up mirror-owned downloads.
     """
 
-    def __init__(self, pkg, dry_run=False, wait_time=0.5):
+    def __init__(self, pkg, dry_run=False, wait_time=0.5, cleanup=False):
         self.dry_run = dry_run
         self.pkg = pkg
         self.wait_time = wait_time
+        self.cleanup = cleanup
 
     def run(self):
         """
@@ -95,8 +96,9 @@ class PackageUploadTask(TaskBase):
                 package_counter.value = 0
                 counter_start.value = time.time()
 
-        # delete the package
-        self.pkg.delete()
+        # Cache pushes borrow local archives; only mirror downloads are disposable.
+        if self.cleanup:
+            self.pkg.delete()
         return result
 
 
