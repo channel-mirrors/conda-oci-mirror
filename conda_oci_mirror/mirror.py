@@ -70,6 +70,7 @@ class Mirror:
 
         # Set the timeout
         self.timeout = timeout / 1000.0
+        self.errors = []
 
     def announce(self):
         """
@@ -85,6 +86,7 @@ class Mirror:
         """
         Update from a conda mirror (do a mirror) akin to a pull and a push.
         """
+        self.errors.clear()
         util.print_item("To: ", self.registry)
 
         # Publish metadata only after every package upload has succeeded.
@@ -126,6 +128,8 @@ class Mirror:
                     )
                 )
 
+            self.errors.extend(repo.errors)
+
             # We can't actually push without auth
             if dry_run:
                 logger.info(
@@ -137,6 +141,7 @@ class Mirror:
                 tasks.RepoUploadTask(repo, self.registry, cache_dir, dry_run)
             )
 
+        self.errors.extend(runner.errors)
         items = runner.run_serial() if serial else runner.run()
         if not dry_run:
             items += repo_runner.run_serial() if serial else repo_runner.run()
@@ -155,6 +160,7 @@ class Mirror:
         """
         Pull latest packages from a location (the GitHub user) to a local cache.
         """
+        self.errors.clear()
         util.print_item("From: ", self.registry)
         util.print_item("  To: ", self.cache_dir)
 
@@ -178,9 +184,12 @@ class Mirror:
 
             for package_file, info in repodata.latest_packages(self.packages):
                 media_type = repodata.get_package_mediatype(package_file)
-                reference = pkg.package_reference(
-                    info["name"], f"{info['version']}-{info['build']}"
-                )
+                tag = f"{info['version']}-{info['build']}"
+                if pkg.skip_invalid_tag(
+                    tag, f"{self.channel}/{subdir}/{package_file}", self.errors
+                ):
+                    continue
+                reference = pkg.package_reference(info["name"], tag)
                 uri = f"{self.registry}/{self.channel}/{subdir}/{reference}"
                 if dry_run:
                     logger.info(f"Would be pulling {reference}, but dry-run is set.")
@@ -212,6 +221,7 @@ class Mirror:
         """
         Push packages to the remote.
         """
+        self.errors.clear()
         util.print_item("From: ", self.cache_dir)
         util.print_item("  To: ", self.registry)
         pushes = []
@@ -258,6 +268,8 @@ class Mirror:
                         task, wait_time=self.timeout, dry_run=dry_run
                     )
                 )
+
+            self.errors.extend(runner.errors)
 
             # Run tasks for this runner
             if serial:

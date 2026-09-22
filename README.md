@@ -18,6 +18,15 @@ The downloaded repodata snapshot is published only after all scheduled package u
 an upload failure prevents repodata publication. Metadata is not downloaded again at publication time.
 Filtered mirrors still publish the full upstream repodata, not a filtered index.
 
+Packages whose encoded version/build cannot form a valid OCI tag (for example, build strings
+containing spaces or `*`, or tags longer than 128 characters) are skipped before package downloads
+or registry lookups for that archive. Each skip is logged as an error with the source archive and tag.
+Mirroring and cache operations continue with valid packages, then the CLI exits with status 1 if
+anything was skipped, including in dry runs. Python callers can inspect `mirror.errors` after each
+operation; `PackageRepo.find_packages()` also exposes its scan errors via `repo.errors`.
+This does not rename packages or remove entries from the upstream repodata snapshot: a run with
+skipped packages is incomplete, not a successful full mirror. No GitHub issues are created automatically.
+
 ### Pull Cache
 
 A **pull-cache** can pull from a registry that you may not be able to write to, to your local cache.

@@ -6,6 +6,7 @@ import json
 import os
 import pathlib
 import platform
+import re
 import shutil
 import tempfile
 
@@ -82,6 +83,21 @@ def reverse_version_build_tag(tag: str):
 
 def version_build_tag(tag: str):
     return tag.replace("+", "__p__").replace("!", "__e__").replace("=", "__eq__")
+
+
+def skip_invalid_tag(tag, source, errors):
+    """Report unrepresentable package tags without changing their identity."""
+    encoded = version_build_tag(tag)
+    if re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}", encoded):
+        return False
+    error = (
+        f"Skipping {source!r}: invalid OCI tag {encoded!r}; expected 1–128 ASCII "
+        "letters, digits, underscores, dots or hyphens, starting with a letter, "
+        "digit or underscore. Fix/rebuild the upstream package."
+    )
+    errors.append(error)
+    logger.error(error)
+    return True
 
 
 def package_reference(package, tag=None):
