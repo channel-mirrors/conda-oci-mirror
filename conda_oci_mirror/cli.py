@@ -90,6 +90,10 @@ def mirror(
         timeout=timeout,
     )
     m.update(dry_run)
+    if m.errors:
+        raise click.ClickException(
+            f"Skipped {len(m.errors)} invalid package tags; see errors above."
+        )
 
 
 @main.command()
@@ -123,6 +127,10 @@ def pull_cache(
         timeout=timeout,
     )
     m.pull_latest(dry_run)
+    if m.errors:
+        raise click.ClickException(
+            f"Skipped {len(m.errors)} invalid package tags; see errors above."
+        )
 
 
 @main.command()
@@ -163,3 +171,7 @@ def push_cache(
         m.push_all(dry_run)
     else:
         m.push_new(dry_run)
+    if m.errors:
+        raise click.ClickException(
+            f"Skipped {len(m.errors)} invalid package tags; see errors above."
+        )

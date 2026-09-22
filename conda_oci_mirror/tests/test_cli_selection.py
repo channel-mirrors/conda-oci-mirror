@@ -28,7 +28,7 @@ def no_network(monkeypatch):
     ],
 )
 def test_boolean_switches(monkeypatch, command, method):
-    mirror = Mock()
+    mirror = Mock(return_value=Mock(errors=[]))
     log = Mock()
     monkeypatch.setattr("conda_oci_mirror.cli.Mirror", mirror)
     monkeypatch.setattr("conda_oci_mirror.cli.setup_logger", log)
@@ -40,7 +40,7 @@ def test_boolean_switches(monkeypatch, command, method):
 
 @pytest.mark.parametrize("flag", ["--push-all", "--all"])
 def test_push_all_switch(monkeypatch, flag):
-    mirror = Mock()
+    mirror = Mock(return_value=Mock(errors=[]))
     monkeypatch.setattr("conda_oci_mirror.cli.Mirror", mirror)
     result = CliRunner().invoke(main, ["push-cache", flag])
     assert result.exit_code == 0, result.output
@@ -50,7 +50,7 @@ def test_push_all_switch(monkeypatch, flag):
 
 @pytest.mark.parametrize("flag", ["--upload-delay", "--timeout"])
 def test_upload_delay_alias(monkeypatch, flag):
-    mirror = Mock()
+    mirror = Mock(return_value=Mock(errors=[]))
     monkeypatch.setattr("conda_oci_mirror.cli.Mirror", mirror)
     result = CliRunner().invoke(main, ["mirror", flag, "0", "--workers", "2"])
     assert result.exit_code == 0, result.output

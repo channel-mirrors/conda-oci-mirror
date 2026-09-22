@@ -17,6 +17,7 @@ from conda_oci_mirror.package import (
     matches_package,
     package_reference,
     reverse_version_build_tag,
+    skip_invalid_tag,
 )
 
 # Mapping of extensions to media types
@@ -153,6 +154,7 @@ class PackageRepo:
         self._existing_tags = {}
         self._existing_manifests = {}
         self.new_archives = set()
+        self.errors = []
 
         # Can be over-ridden by upload/tags/packages functions if desired
         self.client = client or get_oras_client(registry)
@@ -357,6 +359,7 @@ class PackageRepo:
         self._existing_tags.clear()
         self._existing_manifests.clear()
         self.new_archives.clear()
+        self.errors.clear()
         repodata = self.load_repodata(include_yanked)
 
         # Most builds have one format; inspect layers when both formats are listed.
@@ -370,6 +373,11 @@ class PackageRepo:
                 continue
 
             ext = repodata.get_package_extension(pkg)
+            start = len(info["name"]) + 1
+            end = -(len(ext) + 1)
+            tag = pkg[start:end]
+            if skip_invalid_tag(tag, f"{self.name}/{pkg}", self.errors):
+                continue
             # ponytail: unique upstream formats use tag presence; full audits must
             # verify layers with get_existing_packages(verify_media_type=True).
             existing_packages = self.get_existing_packages(
@@ -388,9 +396,6 @@ class PackageRepo:
             )
             other_file = pkg[: -(len(ext) + 1)] + "." + other_ext
             if exists and other_file in repodata.data.get(other_key, {}):
-                start = len(info["name"]) + 1
-                end = -(len(ext) + 1)
-                tag = pkg[start:end]
                 exists = self.has_package_format(info["name"], tag, ext, registry)
             if not exists:
                 logger.info(f"Adding {pkg} to queue")
