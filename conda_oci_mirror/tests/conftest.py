@@ -1,5 +1,6 @@
 import os
 import sys
+import uuid
 
 import pytest
 from xprocess import ProcessStarter
@@ -52,6 +53,12 @@ def test_user():
 
 @pytest.fixture
 def oci_registry(xprocess):
+    external = os.environ.get("CONDA_OCI_TEST_REGISTRY")
+    if external:
+        # Isolate tests even when they share one externally managed registry.
+        yield f"{external.rstrip('/')}/test-{uuid.uuid4().hex}"
+        return
+
     class Starter(ProcessStarter):
         # startup pattern
         pattern = r".*listening on \[::\]:5000.*"

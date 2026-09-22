@@ -10,6 +10,7 @@ import oras.provider
 import requests
 from oras.decorator import ensure_container
 
+import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.util as util
 from conda_oci_mirror.logger import logger
 
@@ -55,7 +56,8 @@ class Pusher:
     Class to handle layers and pushing with oras
     """
 
-    def __init__(self, root, timestamp=None, client=None):
+    def __init__(self, root, timestamp=None, client=None, preserve_existing=True):
+        self.preserve_existing = preserve_existing
         self.client = client
         self.root = root
         self.layers = []
@@ -105,7 +107,7 @@ class Pusher:
         logger.debug(f"⭐️ Pushing {uri}: {self.created_at}")
 
         client = self.client or get_oras_client(uri)
-        client.push(uri, self.layers)
+        client.push(uri, self.layers, preserve_existing=self.preserve_existing)
 
         # Return lookup with URI and layers
         return {"uri": uri, "layers": self.layers}
@@ -131,6 +133,19 @@ class Registry(oras.provider.Registry):
         state["_session"] = None
         state["_session_pid"] = None
         return state
+
+    def _check_200_response(self, response):
+        response.raise_for_status()
+        return super()._check_200_response(response)
+
+    @ensure_container
+    def get_optional_manifest(self, container):
+        try:
+            return self.get_manifest(container)
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code == 404:
+                return None
+            raise
 
     def set_insecure(self):
         """
@@ -192,7 +207,7 @@ class Registry(oras.provider.Registry):
         return paths
 
     @ensure_container
-    def push(self, container, archives: list):
+    def push(self, container, archives: list, preserve_existing=True):
         """
         Given a dict of layers (paths and corresponding mediaType) push.
         """
@@ -238,6 +253,23 @@ class Registry(oras.provider.Registry):
             # Do we need to cleanup a temporary targz?
             if cleanup_blob and os.path.exists(blob):
                 os.remove(blob)
+
+        # A package tag may contain both archive formats. Preserve the other one
+        # by reusing its descriptor; no blob download or re-upload is needed.
+        package_types = {
+            defaults.package_conda_media_type,
+            defaults.package_tarbz2_media_type,
+        }
+        uploaded_types = {layer["mediaType"] for layer in manifest["layers"]}
+        if preserve_existing and uploaded_types & package_types:
+            previous = self.get_optional_manifest(container)
+            if previous:
+                keep = package_types - uploaded_types
+                manifest["layers"].extend(
+                    layer
+                    for layer in previous.get("layers", [])
+                    if layer["mediaType"] in keep
+                )
 
         # Prepare manifest and config
         # Note that we don't add annotations, etc. here

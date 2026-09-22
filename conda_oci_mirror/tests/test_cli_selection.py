@@ -127,24 +127,27 @@ def test_selection_agrees_across_operations(tmp_path, monkeypatch, patterns, exp
         queued.extend(runner.tasks)
         return []
 
+    def uploads():
+        return [task for group in queued for task in [group] + group.following]
+
     monkeypatch.setattr(TaskRunner, "run_serial", capture)
     mirror.update(dry_run=True, serial=True)
-    assert {task.pkg.package_info["name"] for task in queued} == expected
-    assert len(queued) == len(expected) + ("alpha" in expected)
+    assert {task.pkg.package_info["name"] for task in uploads()} == expected
+    assert len(uploads()) == len(expected) + ("alpha" in expected)
     queued.clear()
     mirror.pull_latest(serial=True)
     assert {task.uri.rsplit("/", 1)[-1].split(":")[0] for task in queued} == expected
     assert len(queued) == len(expected) + ("alpha" in expected)
     queued.clear()
     mirror.push_all(dry_run=True, serial=True)
-    assert {task.pkg.package_name_bare for task in queued} == expected
-    assert len(queued) == len(expected) + ("alpha" in expected)
+    assert {task.pkg.package_name_bare for task in uploads()} == expected
+    assert len(uploads()) == len(expected) + ("alpha" in expected)
 
     # No index: push_new must select the same archives, without changing them.
     index.unlink()
     queued.clear()
     mirror.push_new(dry_run=True, serial=True)
-    assert {task.pkg.package_name_bare for task in queued} == expected
+    assert {task.pkg.package_name_bare for task in uploads()} == expected
     assert {path: path.read_bytes() for path in directory.iterdir()} == {
         path: content for path, content in original.items() if path != index
     }
