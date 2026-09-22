@@ -36,6 +36,18 @@ A push cache with `--push-all` (also available as `--all`) will push all selecte
 regardless of status. Cache pushes leave local archives and repodata unchanged, including during dry runs and failed uploads.
 They compare against the existing local repodata without running `conda index`.
 
+### Archive formats and concurrent publishers
+
+A package tag can contain both `.conda` and `.tar.bz2` archive layers. Uploading one format preserves the other;
+shared `info` layers describe the most recently uploaded archive. No new tag naming scheme is required.
+Uploads to the same tag are serialized within a run; independent mirror processes must not write the same tag concurrently.
+
+Normal mirroring keeps the tag-only check for builds with a single upstream format. When upstream lists both formats,
+the mirror checks the manifest and repairs a missing layer. Known-new tags need no preservation lookup on their first upload;
+cache pushes and retries inspect existing manifests. None of these checks download package blobs.
+For a full layer-level audit, `PackageRepo.get_existing_packages()` verifies manifests by default; this is intentionally
+more expensive than normal mirror planning. Registry authorization and server errors are not treated as absent packages.
+
 ## Usage
 
 ### Install
@@ -326,6 +338,9 @@ And run tests:
 ```bash
 $ pytest -xs conda_oci_mirror/tests/*.py
 ```
+
+To use an already-running test registry instead of starting Docker containers, set
+`CONDA_OCI_TEST_REGISTRY=http://127.0.0.1:5000`. Tests use isolated namespaces in that registry.
 
 See [TODO.md](TODO.md) for some questions and items to do.
 

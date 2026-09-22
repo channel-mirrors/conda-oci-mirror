@@ -106,9 +106,12 @@ class Package:
         existing_file=None,
         timestamp=None,
         client=None,
+        new_tag=False,
     ):
         """
         Info is only required if the file does not exist yet.
+        new_tag is for mirror planning that just verified absence; independent
+        writers of the same registry tag must be excluded by the caller.
         """
         self.channel = channel
         self.subdir = subdir
@@ -120,6 +123,7 @@ class Package:
         self._package_name = None
         self.file = existing_file
         self.timestamp = timestamp
+        self.new_tag = new_tag
 
     def ensure_file(self):
         """
@@ -280,6 +284,12 @@ class Package:
 
             # Push main tag and extras using the same spelling as registry reads.
             for tag in [self.tag] + list(extra_tags):
+                # Only the main tag can be known absent from mirror planning.
+                pusher.preserve_existing = not self.new_tag or tag != self.tag
+                # A failed response may still mean the registry committed the tag.
+                # Retries and later uploads must inspect it rather than assume absence.
+                if tag == self.tag:
+                    self.new_tag = False
                 reference = package_reference(name, tag)
                 uri = f"{self.registry}/{self.channel}/{self.subdir}/{reference}"
                 items.append(pusher.push(uri))
