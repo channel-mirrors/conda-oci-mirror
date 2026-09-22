@@ -89,10 +89,6 @@ class Pusher:
         return {"uri": uri, "layers": self.layers}
 
 
-# Cache of manifests
-manifest_cache = {}
-
-
 class Registry(oras.provider.Registry):
     def set_insecure(self):
         """
@@ -105,11 +101,8 @@ class Registry(oras.provider.Registry):
         """
         Given a manifest of layers, retrieve a layer based on desired media type
         """
-        # Keep a cache of manifests
-        global manifest_cache
-        if container.uri not in manifest_cache:
-            manifest_cache[container.uri] = self.get_manifest(container)
-        manifest = manifest_cache[container.uri]
+        # Tags (including latest) can move between pulls.
+        manifest = self.get_manifest(container)
 
         # Let's return a list of download paths to the user
         paths = []

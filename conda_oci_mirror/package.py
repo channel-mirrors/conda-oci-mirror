@@ -255,10 +255,9 @@ class Package:
             # The index must contain the subdirectory
             subdir = index.get("subdir")
             if not subdir:
-                logger.error(
+                raise ValueError(
                     f"info.json for {name}@{version_and_build} doesn't contain subdir!"
                 )
-                return
 
             # Is this a private or similar package? (not sure what this is doing)
             if name.startswith("_"):

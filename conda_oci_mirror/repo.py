@@ -16,10 +16,6 @@ from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import Pusher, oras
 from conda_oci_mirror.package import reverse_version_build_tag
 
-# This is shared between PackageRepo instances
-existing_tags_cache = {}
-
-
 # Mapping of extensions to media types
 package_extensions = {
     "tar.bz2": defaults.package_tarbz2_media_type,
@@ -150,13 +146,13 @@ class PackageRepo:
         self.subdir = subdir
         self.cache_dir = cache_dir or defaults.CACHE_DIR
         self.timestamp = None
+        self._existing_tags = {}
 
         # Can be over-ridden by upload/tags/packages functions if desired
         self.registry = registry
 
         # Should the registry requests use http or https?
-        global oras
-        insecure = True if self.registry.startswith("http://") else False
+        insecure = self.registry and self.registry.startswith("http://")
         if insecure:
             oras.set_insecure()
 
@@ -243,6 +239,7 @@ class PackageRepo:
         """
         Ensure respository metadata is freshly downloaded.
         """
+        self.timestamp = None
         util.mkdir_p(os.path.dirname(self.repodata))
         logger.info(f"Downloading patches for {self.channel}/{self.subdir}")
 
@@ -250,26 +247,35 @@ class PackageRepo:
         patches = requests.get(
             f"https://conda.anaconda.org/{self.channel}/{self.subdir}/repodata_from_packages.json",
             allow_redirects=True,
+            timeout=60,
         )
         logger.info(f"Downloading fresh repodata for {self.channel}/{self.subdir}")
         repodata = requests.get(
             f"https://conda.anaconda.org/{self.channel}/{self.subdir}/repodata.json",
             allow_redirects=True,
+            timeout=60,
         )
 
-        # If we retrieve both succesfully, save both for later use
-        if patches.status_code == 200:
+        # Never publish stale metadata after a failed or invalid response.
+        repodata.raise_for_status()
+        repodata.json()
+        if patches.status_code == 404:
+            if os.path.exists(self.patches):
+                os.remove(self.patches)
+        else:
+            patches.raise_for_status()
+            patches.json()
             util.write_file(patches.text, self.patches)
-        if repodata.status_code == 200:
-            util.write_file(repodata.text, self.repodata)
+        util.write_file(repodata.text, self.repodata)
         self.ensure_timestamp()
 
     def upload(self, root, registry=None):
         """
-        Push the repodata.json to a named registry from root context.
+        Publish the last loaded snapshot, downloading it if none has been loaded.
         """
         registry = registry or self.registry
-        self.ensure_repodata()
+        if self.timestamp is None:
+            self.ensure_repodata()
         pushes = []
 
         # title is used for archive name (path extracted to) so relative to root
@@ -285,7 +291,9 @@ class PackageRepo:
 
         # compress repodata with zstd
         compressed = self.compress_repodata()
-        pusher.add_layer(compressed, defaults.repodata_media_type_v1_zst, title)
+        pusher.add_layer(
+            compressed, defaults.repodata_media_type_v1_zst, title + ".zst"
+        )
 
         # Push for a tag for the date, and latest
         for tag in pusher.created_at, "latest":
@@ -336,6 +344,7 @@ class PackageRepo:
         """
         registry = registry or self.registry
         skips = skips or []
+        self._existing_tags.clear()
         repodata = self.load_repodata(include_yanked)
 
         # Look through package info for conda and regular packages
@@ -372,23 +381,16 @@ class PackageRepo:
         """
         registry = registry or self.registry
 
-        global existing_tags_cache
-
         # These are empty packages that serve as helpers
         if package.startswith("_"):
             package = f"zzz{package}"
 
-        if package in existing_tags_cache:
-            return existing_tags_cache[package]
-
-        # GitHub packages name
         gh_name = f"{registry}/{self.channel}/{self.subdir}/{package}"
-
-        # We likely want this to raise an error if there is one.
-        tags = oras.get_tags(gh_name, N=100_000_000)
-        logger.info(f"Found {len(tags)} tags for {gh_name}")
-        existing_tags_cache[package] = [reverse_version_build_tag(t) for t in tags]
-        return tags
+        if gh_name not in self._existing_tags:
+            tags = oras.get_tags(gh_name, N=100_000_000)
+            logger.info(f"Found {len(tags)} tags for {gh_name}")
+            self._existing_tags[gh_name] = [reverse_version_build_tag(t) for t in tags]
+        return self._existing_tags[gh_name]
 
     def get_existing_packages(self, package, registry=None, package_ext="conda"):
         """
