@@ -1,5 +1,6 @@
 import datetime
 import os
+import tempfile
 
 import oras as oraslib
 import oras.defaults
@@ -96,11 +97,24 @@ class Registry(oras.provider.Registry):
         """
         self.prefix = "http"
 
+    def download_blob(self, container, digest, outfile):
+        """Verify blobs before replacing files, for both regular and media-type pulls."""
+        parent = os.path.dirname(os.path.abspath(outfile))
+        os.makedirs(parent, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=parent) as staging_dir:
+            staged = os.path.join(staging_dir, "download")
+            super().download_blob(container, digest, staged)
+            if digest != f"sha256:{util.sha256sum(staged)}":
+                raise ValueError(f"Checksum mismatch downloading {digest}")
+            os.replace(staged, outfile)
+        return outfile
+
     @ensure_container
     def pull_by_media_type(self, container, dest, media_type=None):
         """
         Given a manifest of layers, retrieve a layer based on desired media type
         """
+        dest = os.path.abspath(dest)
         # Tags (including latest) can move between pulls.
         manifest = self.get_manifest(container)
 
@@ -130,7 +144,6 @@ class Registry(oras.provider.Registry):
                     paths.append(outfile)
                     continue
 
-            # this function  handles creating the output directory if does not exist
             print(f"Downloading {artifact} to {outfile}")
             path = self.download_blob(container, layer["digest"], outfile)
             paths.append(path)

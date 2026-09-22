@@ -1,7 +1,6 @@
 import multiprocessing as mp
 import time
 
-from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import oras
 
 # Counters for lifetime of tasks
@@ -119,10 +118,10 @@ class DownloadTask(TaskBase):
         # Wait based on the last interaction time
         self.wait()
 
-        try:
-            return oras.pull_by_media_type(self.uri, self.cache_dir, self.media_type)
-        except Exception as e:
-            logger.warning(f"Cannot pull package {self.uri}: {e}")
+        paths = oras.pull_by_media_type(self.uri, self.cache_dir, self.media_type)
+        if not paths:
+            raise ValueError(f"No {self.media_type} layer found for {self.uri}")
+        return paths
 
 
 class TaskRunner:
