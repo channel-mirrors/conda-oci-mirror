@@ -3,6 +3,7 @@
 import datetime
 import fnmatch
 import os
+import re
 import tarfile
 
 import packaging.version
@@ -14,7 +15,10 @@ import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.util as util
 from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import Pusher, oras
-from conda_oci_mirror.package import reverse_version_build_tag
+from conda_oci_mirror.package import reverse_version_build_tag, version_build_tag
+
+# OCI distribution spec tag grammar
+valid_tag_regex = re.compile(r"^[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}$")
 
 # This is shared between PackageRepo instances
 existing_tags_cache = {}
@@ -348,6 +352,13 @@ class PackageRepo:
 
             # Case 2: skip it entirely!
             if skips and info["name"] in skips:
+                continue
+
+            # Skip packages that can't be expressed as an OCI tag (e.g. a
+            # build string containing "*" or spaces)
+            tag = version_build_tag(f"{info['version']}-{info['build']}")
+            if not valid_tag_regex.match(tag):
+                logger.warning(f"Skipping {pkg}: invalid OCI tag {tag!r}")
                 continue
 
             # Existing packages for this will depend on the extension
