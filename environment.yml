@@ -9,7 +9,7 @@ dependencies:
   - oras-py=0.1.14
   - conda-package-handling
   - zstandard
-  - packaging
+  - py-rattler>=0.15
   - pre-commit
   - pytest
   - pytest-xprocess

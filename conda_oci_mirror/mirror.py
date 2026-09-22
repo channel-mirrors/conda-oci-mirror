@@ -177,34 +177,15 @@ class Mirror:
             repodata.load(index_files[0])
             logger.info(f"Found {len(repodata.package_archives)} packages from {uri}")
 
-            # Don't repeat requests for same uri and media type
-            seen = set()
-            for package_file, info in repodata.packages:
-                # The package name
-                package = info["name"]
-
-                # The media type we will ask for
+            for package_file, info in repodata.latest_packages(self.packages):
                 media_type = repodata.get_package_mediatype(package_file)
-
-                # Skip those that aren't desired if a filter is given
-                if not pkg.matches_package(package, self.packages):
-                    continue
-
-                # The latest is determined by upload date
-                latest = repodata.get_latest_tag(package)
-                uri = f"{self.registry}/{self.channel}/{subdir}/{package}:{latest}"
-
-                # Ensure we don't run the task twice
-                if (uri, media_type) in seen:
-                    continue
-
-                # Dry run don't actually do it
+                reference = pkg.package_reference(
+                    info["name"], f"{info['version']}-{info['build']}"
+                )
+                uri = f"{self.registry}/{self.channel}/{subdir}/{reference}"
                 if dry_run:
-                    logger.info(f"Would be pulling {package}, but dry-run is set.")
+                    logger.info(f"Would be pulling {reference}, but dry-run is set.")
                     continue
-                seen.add((uri, media_type))
-
-                # Not every package is guaranteed to exist
                 runner.add_task(tasks.DownloadTask(uri, cache_dir, media_type))
 
         if serial:

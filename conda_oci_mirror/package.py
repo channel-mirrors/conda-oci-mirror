@@ -84,6 +84,16 @@ def version_build_tag(tag: str):
     return tag.replace("+", "__p__").replace("!", "__e__").replace("=", "__eq__")
 
 
+def package_reference(package, tag=None):
+    """Use the existing OCI spelling for a conda package name and optional tag."""
+    name, separator, embedded_tag = package.partition(":")
+    if tag is None and separator:
+        tag = embedded_tag
+    if name.startswith("_"):
+        name = f"zzz{name}"
+    return name if tag is None else f"{name}:{version_build_tag(tag)}"
+
+
 class Package:
     def __init__(
         self,
@@ -140,7 +150,7 @@ class Package:
         if self._package_name is not None:
             return self._package_name
 
-        name = pathlib.Path(self.file).name
+        name = pathlib.Path(self.file or self.package).name
         for ext in [".tar.bz2", ".conda"]:
             if name.endswith(ext):
                 self._package_name = name[: -len(ext)]
@@ -266,12 +276,9 @@ class Package:
                     f"info.json for {name}@{version_and_build} doesn't contain subdir!"
                 )
 
-            # Is this a private or similar package? (not sure what this is doing)
-            if name.startswith("_"):
-                name = f"zzz{name}"
-
-            # Push main tag and extras
-            uri = f"{self.registry}/{self.channel}/{self.subdir}/{name}"
-            for tag in [self.version_build_tag] + list(extra_tags):
-                items.append(pusher.push(f"{uri}:{tag}"))
+            # Push main tag and extras using the same spelling as registry reads.
+            for tag in [self.tag] + list(extra_tags):
+                reference = package_reference(name, tag)
+                uri = f"{self.registry}/{self.channel}/{self.subdir}/{reference}"
+                items.append(pusher.push(uri))
             return items
