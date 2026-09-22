@@ -14,6 +14,9 @@ In practice, this typically means **all** packages, however for the purposes of 
 You must have control of the registry you intend to mirror to, meaning you can push and pull from it.
 When you do a mirror, the repodata.json is always pulled fresh, and any local changes you've made are
 over-written. We do this so the local cache is in sync with the remote.
+The downloaded repodata snapshot is published only after all scheduled package uploads succeed;
+an upload failure prevents repodata publication. Metadata is not downloaded again at publication time.
+Filtered mirrors still publish the full upstream repodata, not a filtered index.
 
 ### Pull Cache
 

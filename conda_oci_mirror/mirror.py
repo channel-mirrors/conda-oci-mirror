@@ -95,8 +95,9 @@ class Mirror:
         """
         util.print_item("To: ", self.registry)
 
-        # Create a task runner (defaults to 4 processes)
+        # Publish metadata only after every package upload has succeeded.
         runner = tasks.TaskRunner(workers=self.workers)
+        repo_runner = tasks.TaskRunner(workers=self.workers)
 
         # If they think they are pushing but no auth, they are not :)
         if not oras.has_auth and dry_run is False:
@@ -133,15 +134,14 @@ class Mirror:
                 )
                 continue
 
-            # Add the repository to be run via a task (after its respective packages in the queue)
-            runner.add_task(
+            repo_runner.add_task(
                 tasks.RepoUploadTask(repo, self.registry, cache_dir, dry_run)
             )
 
-        # Once we get here, run all tasks, this returns all the items
-        if serial:
-            return runner.run_serial()
-        return runner.run()
+        items = runner.run_serial() if serial else runner.run()
+        if not dry_run:
+            items += repo_runner.run_serial() if serial else repo_runner.run()
+        return items
 
     def iter_subdirs(self):
         """
