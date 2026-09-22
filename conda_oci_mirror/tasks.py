@@ -2,6 +2,7 @@ import multiprocessing as mp
 import time
 
 from conda_oci_mirror.oras import get_oras_client, registry_name
+from conda_oci_mirror.package import package_reference
 
 # Counters for lifetime of tasks
 package_counter = mp.Value("i", 0)
@@ -64,8 +65,15 @@ class PackageUploadTask(TaskBase):
         self.pkg = pkg
         self.wait_time = wait_time
         self.cleanup = cleanup
+        self.following = []
 
     def run(self):
+        results = self._run()
+        for task in self.following:
+            results += task._run()
+        return results
+
+    def _run(self):
         """
         Run the task. This means:
 
@@ -135,8 +143,25 @@ class TaskRunner:
     def __init__(self, workers=1):
         self.workers = workers
         self.tasks = []
+        self._uploads = {}
 
     def add_task(self, task):
+        if isinstance(task, PackageUploadTask):
+            pkg = task.pkg
+            key = (
+                pkg.client.prefix,
+                pkg.registry,
+                pkg.channel,
+                pkg.subdir,
+                package_reference(pkg.package_name_bare, pkg.tag),
+            )
+            # ponytail: serialize per tag within this run; independent publishers
+            # need external per-tag locks to avoid concurrent manifest updates.
+            if key in self._uploads:
+                task.pkg.new_tag = False
+                self._uploads[key].following.append(task)
+                return
+            self._uploads[key] = task
         self.tasks.append(task)
 
     def run_serial(self):

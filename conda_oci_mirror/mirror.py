@@ -118,6 +118,7 @@ class Mirror:
                     self.registry,
                     info=info,
                     client=self.client,
+                    new_tag=package in repo.new_archives,
                 )
                 runner.add_task(
                     tasks.PackageUploadTask(
