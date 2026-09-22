@@ -21,6 +21,8 @@ Filtered mirrors still publish the full upstream repodata, not a filtered index.
 ### Pull Cache
 
 A **pull-cache** can pull from a registry that you may not be able to write to, to your local cache.
+It selects the newest conda version and build number separately for each package and archive format;
+when builds tie, the first record in repodata wins. Versions are not ordered by upload date.
 Downloaded OCI layers are checked against their SHA-256 digests before replacing local files.
 Interrupted or invalid downloads leave an existing destination unchanged and remove temporary files.
 Missing metadata, missing requested package layers, and download failures cause the command to fail rather than silently succeed.
@@ -37,6 +39,8 @@ They compare against the existing local repodata without running `conda index`.
 ## Usage
 
 ### Install
+
+Python 3.8 or newer is required. Conda version ordering uses `py-rattler`, not PEP 440 ordering.
 
 Create a new environment:
 

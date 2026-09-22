@@ -4,21 +4,25 @@ import datetime
 import os
 import tarfile
 
-import packaging.version
 import requests
 import zstandard as zstd
+from rattler import Version
 
 import conda_oci_mirror.decorators as decorators
 import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.util as util
 from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import Pusher, oras
-from conda_oci_mirror.package import matches_package, reverse_version_build_tag
+from conda_oci_mirror.package import (
+    matches_package,
+    package_reference,
+    reverse_version_build_tag,
+)
 
 # Mapping of extensions to media types
 package_extensions = {
-    "tar.bz2": defaults.package_tarbz2_media_type,
     "conda": defaults.package_conda_media_type,
+    "tar.bz2": defaults.package_tarbz2_media_type,
 }
 
 
@@ -100,37 +104,38 @@ class RepoData:
         """
         return set(x[1]["name"] for x in self.packages)
 
-    def get_latest_tag(self, package):
-        """
-        Try to get the latest tag based on build number / version string.
-        """
-        # Subset to the info of those we care about
-        subset = [info for _, info in self.filtered_packages(package)]
-
-        # Cut out early if we don't have any packages
-        if not subset:
-            return
-
-        # First, for each build, get the latest version based on build number
-        packages = {}
-        for entry in subset:
-            if entry["version"] not in packages:
-                packages[entry["version"]] = entry
+    def latest_packages(self, names=None):
+        """Select the newest version/build per name and archive format in one scan."""
+        latest = {}
+        versions = {}
+        for filename, info in self.packages:
+            if not matches_package(info["name"], names):
                 continue
+            version = info["version"]
+            if version not in versions:
+                versions[version] = Version(version)
+            rank = (versions[version], info["build_number"])
+            key = (info["name"], self.get_package_extension(filename))
+            # Preserve the first record when version/build numbers tie, as before.
+            if key not in latest or rank > latest[key][0]:
+                latest[key] = (rank, filename, info)
+        for _, filename, info in latest.values():
+            yield filename, info
 
-            is_newer = (
-                entry["build_number"] > packages[entry["version"]]["build_number"]
-            )
-            if entry["version"] in packages and is_newer:
-                packages[entry["version"]] = entry
-
-        # Find latest tag from set of highest build numbers
-        tags = list(packages)
-        tags.sort(key=packaging.version.Version)
-
-        # The tag is technically the version + build number
-        latest = packages[tags[-1]]
-        return f"{latest['version']}-{latest['build']}"
+    def get_latest_tag(self, package, package_ext=None):
+        """Return the newest conda version/build, optionally for one archive format."""
+        candidates = (
+            info
+            for filename, info in self.latest_packages([package])
+            if package_ext in (None, self.get_package_extension(filename))
+        )
+        latest = max(
+            candidates,
+            key=lambda info: (Version(info["version"]), info["build_number"]),
+            default=None,
+        )
+        if latest is not None:
+            return f"{latest['version']}-{latest['build']}"
 
 
 class PackageRepo:
@@ -175,7 +180,9 @@ class PackageRepo:
         """
         Get the index.json for a particular package
         """
-        container = f"{self.registry}/{self.channel}/{self.subdir}/{package}"
+        container = (
+            f"{self.registry}/{self.channel}/{self.subdir}/{package_reference(package)}"
+        )
 
         # We pull to the higher up cache directory, which should extract to cache
         # E.g., '/tmp/pytest-of-vanessa/pytest-19/test_package_repo_linux_64_0/cache
@@ -196,7 +203,9 @@ class PackageRepo:
 
         We can change this to be something else (e.g., member retrieval) if desired.
         """
-        container = f"{self.registry}/{self.channel}/{self.subdir}/{package}"
+        container = (
+            f"{self.registry}/{self.channel}/{self.subdir}/{package_reference(package)}"
+        )
         res = oras.pull_by_media_type(
             container, self.cache_dir, defaults.info_archive_media_type
         )
@@ -211,7 +220,9 @@ class PackageRepo:
         """
         Get the pull package .conda or .tar.bz2 file
         """
-        container = f"{self.registry}/{self.channel}/{self.subdir}/{package}"
+        container = (
+            f"{self.registry}/{self.channel}/{self.subdir}/{package_reference(package)}"
+        )
 
         # Try for latest .conda version first
         res = None
@@ -379,11 +390,9 @@ class PackageRepo:
         """
         registry = registry or self.registry
 
-        # These are empty packages that serve as helpers
-        if package.startswith("_"):
-            package = f"zzz{package}"
-
-        gh_name = f"{registry}/{self.channel}/{self.subdir}/{package}"
+        gh_name = (
+            f"{registry}/{self.channel}/{self.subdir}/{package_reference(package)}"
+        )
         if gh_name not in self._existing_tags:
             tags = oras.get_tags(gh_name, N=100_000_000)
             logger.info(f"Found {len(tags)} tags for {gh_name}")
