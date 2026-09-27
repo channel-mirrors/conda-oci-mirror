@@ -38,8 +38,10 @@ Package archives are stored by package name and version/build tag. Repository me
 That manifest contains `repodata.json`, `repodata.json.zst`, and, when the source channel provides it, `repodata_shards.msgpack.zst` as separate media-type layers. Content-addressed repodata shards are stored as:
 
 ```text
-<registry>/<channel>/<subdir>/shards:<sha256>
+<registry>/<channel>/<subdir>/repodata.json/shards:<sha256>
 ```
+
+The shards repository is nested under `repodata.json` so it can never collide with a package repository, since conda package names cannot contain `/`. Clients map the index's relative `./shards/<sha256>.msgpack.zst` URLs to this repository.
 
 Shards are pushed before the index that references them. Each run compares the upstream index with the one published at `repodata.json:latest` and only downloads and pushes shards the published index does not already reference, so the registry's tags are not listed. Until the first index is published, the shard tags are listed once so that an interrupted first push resumes where it stopped. Shards are uploaded by `--shard-workers` threads (default 2); keep this low to avoid overloading the registry.
 
