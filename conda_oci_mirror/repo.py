@@ -1,7 +1,10 @@
 # Packages and functions for them
 
+import concurrent.futures
+import copy
 import datetime
 import os
+import queue
 import tarfile
 import tempfile
 from urllib.parse import urljoin
@@ -171,7 +174,14 @@ class PackageRepo:
     """
 
     def __init__(
-        self, channel, subdir, cache_dir, registry=None, client=None, mirror_shards=True
+        self,
+        channel,
+        subdir,
+        cache_dir,
+        registry=None,
+        client=None,
+        mirror_shards=True,
+        shard_workers=2,
     ):
         self.channel = channel
         self.subdir = subdir
@@ -182,6 +192,7 @@ class PackageRepo:
         self.new_archives = set()
         self.errors = []
         self.mirror_shards = mirror_shards
+        self.shard_workers = shard_workers
         self.source_shards_url = None
 
         # Can be over-ridden by upload/tags/packages functions if desired
@@ -387,6 +398,22 @@ class PackageRepo:
             raise ValueError(f"Repodata shard {digest} has an unexpected digest")
         return shard_path
 
+    def get_pushed_shard_digests(self, registry, client):
+        """
+        Shards already in the registry when no index references them yet.
+
+        Only used until the first index is published, so a first push that was
+        cut off (e.g. by a job time limit) resumes instead of starting over.
+        One tag listing, never repeated once an index exists.
+        """
+        uri = f"{registry}/{self.channel}/{self.subdir}/shards"
+        try:
+            return set(client.get_tags(uri, N=100_000_000))
+        except requests.HTTPError as exc:
+            if exc.response is None or exc.response.status_code != 404:
+                raise
+            return set()
+
     def upload_shards(self, root, registry, client):
         """Push new immutable shards before publishing the index that references them."""
         if not self.mirror_shards or not os.path.exists(self.shard_index):
@@ -394,25 +421,48 @@ class PackageRepo:
 
         with open(self.shard_index, "rb") as index_file:
             digests = shard_digests(read_shard_index(index_file.read()))
-        new_digests = sorted(
-            digests - self.get_published_shard_digests(registry, client)
-        )
+        existing = self.get_published_shard_digests(registry, client)
+        if not existing:
+            existing = self.get_pushed_shard_digests(registry, client)
+        new_digests = sorted(digests - existing)
         logger.info(f"  {len(new_digests)} of {len(digests)} repodata shards are new")
+        if not new_digests:
+            return []
 
-        pushes = []
         uri = f"{registry}/{self.channel}/{self.subdir}/shards"
-        # ponytail: shard transfer is serial; use TaskRunner if initial mirror
-        # throughput becomes a problem.
-        for digest in new_digests:
+        workers = min(self.shard_workers, len(new_digests))
+        # Each thread gets its own client: token, headers and connection pool.
+        clients = queue.SimpleQueue()
+        for _ in range(workers):
+            clients.put(copy.deepcopy(client))
+
+        @decorators.retry(attempts=5)
+        def push_shard(digest):
             shard_path = self.download_shard(digest)
-            pusher = Pusher(root, self.timestamp, client=client)
-            pusher.add_layer(
-                shard_path,
-                defaults.repodata_shard_media_type_v1,
-                os.path.relpath(shard_path, root),
-            )
-            pushes.append(push_manifest(pusher, f"{uri}:{digest}"))
-        return pushes
+            title = os.path.relpath(shard_path, root)
+            worker_client = clients.get()
+            try:
+                worker_client.push_single_layer(
+                    f"{uri}:{digest}",
+                    shard_path,
+                    defaults.repodata_shard_media_type_v1,
+                    title,
+                )
+            finally:
+                clients.put(worker_client)
+            return {
+                "uri": f"{uri}:{digest}",
+                "layers": [
+                    {
+                        "path": shard_path,
+                        "media_type": defaults.repodata_shard_media_type_v1,
+                        "title": title,
+                    }
+                ],
+            }
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            return list(pool.map(push_shard, new_digests))
 
     def upload(self, root, registry=None):
         """

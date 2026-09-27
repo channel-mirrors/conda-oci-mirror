@@ -74,6 +74,12 @@ def add_options(options):
 
 @main.command()
 @add_options(options)
+@click.option(
+    "--shard-workers",
+    default=2,
+    type=click.IntRange(min=1),
+    help="Parallel repodata shard uploads per subdir; kept low to spare the registry",
+)
 def mirror(
     channel,
     subdir,
@@ -85,6 +91,7 @@ def mirror(
     debug,
     workers,
     timeout,
+    shard_workers,
 ):
     setup_logger(
         quiet=quiet,
@@ -98,6 +105,7 @@ def mirror(
         cache_dir=cache_dir,
         workers=workers,
         timeout=timeout,
+        shard_workers=shard_workers,
     )
     m.update(dry_run)
     warn_skipped(m)

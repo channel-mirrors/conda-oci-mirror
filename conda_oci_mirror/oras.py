@@ -285,6 +285,89 @@ class Registry(oras.provider.Registry):
         print(f"Successfully pushed {container}")
         return response
 
+    @ensure_container
+    def push_single_layer(self, container, path, media_type, title):
+        """
+        Push a one-layer artifact with three requests: blob POST, blob PUT, manifest PUT.
+
+        push() authenticates every request from scratch and uploads the empty
+        config each time, roughly 11 requests per artifact. For many small
+        artifacts in one repository (repodata shards), reuse the bearer token
+        and upload the config once.
+        """
+        repository = container.upload_blob_url()
+        layer = oraslib.oci.NewLayer(path, media_type)
+        layer["annotations"] = {oraslib.defaults.annotation_title: title}
+        conf, config_file = oraslib.oci.ManifestConfig()
+
+        configs = self.__dict__.setdefault("_configs_pushed", set())
+        if repository not in configs:
+            self._upload_blob_with_token(container, config_file, conf)
+            configs.add(repository)
+        self._upload_blob_with_token(container, path, layer)
+
+        manifest = oraslib.oci.NewManifest()
+        manifest["layers"].append(layer)
+        manifest["config"] = conf
+        response = self._request_with_token(
+            repository,
+            "PUT",
+            f"{self.prefix}://{container.put_manifest_url()}",
+            headers={"Content-Type": oraslib.defaults.default_manifest_media_type},
+            json=manifest,
+        )
+        self._check_200_response(response)
+        return response
+
+    def _upload_blob_with_token(self, container, path, layer):
+        repository = container.upload_blob_url()
+        response = self._request_with_token(
+            repository,
+            "POST",
+            f"{self.prefix}://{repository}",
+            headers={"Content-Type": "application/octet-stream"},
+        )
+        self._check_200_response(response)
+        session_url = self._get_location(response, container)
+        if not session_url:
+            raise ValueError(f"Issue retrieving session url for {container}")
+        with open(path, "rb") as blob:
+            data = blob.read()
+        response = self._request_with_token(
+            repository,
+            "PUT",
+            oraslib.utils.append_url_params(session_url, {"digest": layer["digest"]}),
+            headers={
+                "Content-Length": str(layer["size"]),
+                "Content-Type": "application/octet-stream",
+            },
+            data=data,
+        )
+        # Like oras' upload_blob: some registries reject the empty config blob.
+        if layer["digest"] == oraslib.defaults.blank_hash and not response.ok:
+            return response
+        self._check_200_response(response)
+        return response
+
+    def _request_with_token(self, repository, method, url, headers=None, **kwargs):
+        """Send a request with this repository's bearer token, renewing it on 401."""
+        tokens = self.__dict__.setdefault("_repository_tokens", {})
+        headers = dict(headers or {})
+        if repository in tokens:
+            headers["Authorization"] = tokens[repository]
+        response = self.session.request(method, url, headers=headers, **kwargs)
+        if response.status_code == 401:
+            # Log in with the credentials, never with a stale bearer token. The
+            # token is kept out of self.headers so other requests are unaffected.
+            self.reset_basic_auth()
+            if self.authenticate_request(response):
+                tokens[repository] = headers["Authorization"] = self.headers[
+                    "Authorization"
+                ]
+                response = self.session.request(method, url, headers=headers, **kwargs)
+            self.reset_basic_auth()
+        return response
+
 
 # Backward-compatible standalone client; mirror operations never use or mutate it.
 oras = get_oras_client()
