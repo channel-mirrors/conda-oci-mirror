@@ -142,6 +142,16 @@ class RepoData:
             return f"{latest['version']}-{latest['build']}"
 
 
+@decorators.retry(attempts=5)
+def push_manifest(pusher, uri):
+    """
+    Retry one metadata push; a dropped connection should not fail the run.
+
+    Retrying per push, not the whole upload, avoids pushing shards again.
+    """
+    return pusher.push(uri)
+
+
 def read_shard_index(content):
     return msgpack.unpackb(zstd.ZstdDecompressor().decompress(content), raw=False)
 
@@ -401,7 +411,7 @@ class PackageRepo:
                 defaults.repodata_shard_media_type_v1,
                 os.path.relpath(shard_path, root),
             )
-            pushes.append(pusher.push(f"{uri}:{digest}"))
+            pushes.append(push_manifest(pusher, f"{uri}:{digest}"))
         return pushes
 
     def upload(self, root, registry=None):
@@ -442,7 +452,7 @@ class PackageRepo:
         # Push for a tag for the date, and latest
         for tag in pusher.created_at, "latest":
             logger.info(f"  pushing tag {tag}")
-            pushes.append(pusher.push(f"{uri}:{tag}"))
+            pushes.append(push_manifest(pusher, f"{uri}:{tag}"))
 
         # Return pushes
         return pushes
