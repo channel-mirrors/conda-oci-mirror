@@ -101,7 +101,7 @@ def test_upload_pushes_only_shards_missing_from_the_published_index(
             return outfile
 
         def get_tags(self, uri, N=None):
-            assert uri == "ghcr.io/example/test/linux-64/shards"
+            assert uri == "ghcr.io/example/test/linux-64/repodata.json/shards"
             listings.append(uri)
             return sorted(registry_tags)
 
@@ -154,7 +154,7 @@ def test_upload_pushes_only_shards_missing_from_the_published_index(
 
     # First run: nothing is published yet, so every shard is pushed first.
     repo, pushes = upload()
-    shard_uri = "ghcr.io/example/test/linux-64/shards"
+    shard_uri = "ghcr.io/example/test/linux-64/repodata.json/shards"
     assert [push["uri"] for push in pushes[:-2]] == [f"{shard_uri}:{digests['old']}"]
     assert pushes[0]["layers"][0]["media_type"] == defaults.repodata_shard_media_type_v1
     assert pushes[-1]["uri"] == "ghcr.io/example/test/linux-64/repodata.json:latest"

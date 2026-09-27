@@ -351,7 +351,7 @@ class PackageRepo:
             f"{base_url}/", index["info"].get("shards_base_url", "")
         )
 
-        # OCI uses a single `shards` repository instead of mirroring the source
+        # OCI uses a single `repodata.json/shards` repository instead of mirroring the source
         # server's physical paths. Package and shard URLs must remain relative
         # to the OCI channel selected by rattler.
         index["info"]["base_url"] = ""
@@ -360,6 +360,15 @@ class PackageRepo:
             index_file.write(
                 zstd.ZstdCompressor().compress(msgpack.packb(index, use_bin_type=True))
             )
+
+    def shards_repository(self, registry):
+        """
+        Repository holding the shards, one tag per shard digest.
+
+        Nested under repodata.json so it can never collide with a package:
+        conda package names cannot contain "/".
+        """
+        return f"{registry}/{self.channel}/{self.subdir}/repodata.json/shards"
 
     def get_published_shard_digests(self, registry, client):
         """
@@ -406,7 +415,7 @@ class PackageRepo:
         cut off (e.g. by a job time limit) resumes instead of starting over.
         One tag listing, never repeated once an index exists.
         """
-        uri = f"{registry}/{self.channel}/{self.subdir}/shards"
+        uri = self.shards_repository(registry)
         try:
             return set(client.get_tags(uri, N=100_000_000))
         except requests.HTTPError as exc:
@@ -429,7 +438,7 @@ class PackageRepo:
         if not new_digests:
             return []
 
-        uri = f"{registry}/{self.channel}/{self.subdir}/shards"
+        uri = self.shards_repository(registry)
         workers = min(self.shard_workers, len(new_digests))
         # Each thread gets its own client: token, headers and connection pool.
         clients = queue.SimpleQueue()
