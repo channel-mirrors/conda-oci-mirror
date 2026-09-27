@@ -250,3 +250,27 @@ def test_invalid_package_metadata_raises(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="doesn't contain subdir"):
         package.upload()
     push.assert_not_called()
+
+
+def test_dropped_connection_retries_only_the_failed_metadata_push(
+    tmp_path, monkeypatch
+):
+    repo = PackageRepo("test", "noarch", tmp_path, "example.com/test")
+    monkeypatch.setattr(
+        "conda_oci_mirror.repo.requests.get",
+        Mock(side_effect=[response(), response(), response(404)]),
+    )
+    monkeypatch.setattr("conda_oci_mirror.decorators.time.sleep", lambda seconds: None)
+    attempts = []
+
+    def push(self, uri):
+        attempts.append(uri)
+        if len(attempts) == 1:
+            raise requests.exceptions.SSLError("record layer failure")
+        return {"uri": uri, "layers": self.layers}
+
+    monkeypatch.setattr(Pusher, "push", push)
+    pushed = repo.upload(tmp_path)
+    dated, latest = (item["uri"] for item in pushed)
+    assert latest.endswith("repodata.json:latest")
+    assert attempts == [dated, dated, latest]
