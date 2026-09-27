@@ -41,7 +41,7 @@ That manifest contains `repodata.json`, `repodata.json.zst`, and, when the sourc
 <registry>/<channel>/<subdir>/shards:<sha256>
 ```
 
-Shards are pushed before the index that references them. Each run compares the upstream index with the one published at `repodata.json:latest` and only downloads and pushes shards the published index does not already reference, so the registry's tags are never listed.
+Shards are pushed before the index that references them. Each run compares the upstream index with the one published at `repodata.json:latest` and only downloads and pushes shards the published index does not already reference, so the registry's tags are not listed. Until the first index is published, the shard tags are listed once so that an interrupted first push resumes where it stopped. Shards are uploaded by `--shard-workers` threads (default 2); keep this low to avoid overloading the registry.
 
 Shards are mirrored only for complete channel mirrors. A package-filtered mirror cannot publish the upstream shard index because it would reference packages that were not mirrored.
 

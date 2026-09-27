@@ -41,7 +41,7 @@ class TestRepoData:
 def test_upload_pushes_only_shards_missing_from_the_published_index(
     tmp_path, monkeypatch
 ):
-    shards = {name: name.encode() for name in ("old", "new")}
+    shards = {name: name.encode() for name in ("old", "new", "extra")}
     digests = {name: hashlib.sha256(data).hexdigest() for name, data in shards.items()}
 
     def pack_index(names):
@@ -100,6 +100,20 @@ def test_upload_pushes_only_shards_missing_from_the_published_index(
             Path(outfile).write_bytes(Path(layer["path"]).read_bytes())
             return outfile
 
+        def get_tags(self, uri, N=None):
+            assert uri == "ghcr.io/example/test/linux-64/shards"
+            listings.append(uri)
+            return sorted(registry_tags)
+
+        def push_single_layer(self, uri, path, media_type, title):
+            # Shards are pushed from per-thread copies of this client.
+            assert self is not client
+            digest = uri.rsplit(":", 1)[1]
+            assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == digest
+            registry_tags.add(digest)
+
+    registry_tags = set()
+    listings = []
     client = Client()
 
     class Pusher:
@@ -142,7 +156,7 @@ def test_upload_pushes_only_shards_missing_from_the_published_index(
     repo, pushes = upload()
     shard_uri = "ghcr.io/example/test/linux-64/shards"
     assert [push["uri"] for push in pushes[:-2]] == [f"{shard_uri}:{digests['old']}"]
-    assert pushes[0]["layers"][0]["mediaType"] == defaults.repodata_shard_media_type_v1
+    assert pushes[0]["layers"][0]["media_type"] == defaults.repodata_shard_media_type_v1
     assert pushes[-1]["uri"] == "ghcr.io/example/test/linux-64/repodata.json:latest"
     assert defaults.repodata_shards_media_type_v1 in {
         layer["mediaType"] for layer in pushes[-1]["layers"]
@@ -160,9 +174,23 @@ def test_upload_pushes_only_shards_missing_from_the_published_index(
         path.unlink()
     downloads.clear()
     upstream["index"] = pack_index(["old", "new"])
+    listings.clear()
     _, pushes = upload()
     assert downloads == ["new"]
     assert [push["uri"] for push in pushes[:-2]] == [f"{shard_uri}:{digests['new']}"]
+    # With an index published, the shard tags are never listed.
+    assert listings == []
+
+    # A first push that was cut off before any index was published resumes:
+    # one tag listing, and only the shards missing from it are pushed.
+    client.latest = None
+    upstream["index"] = pack_index(["old", "new", "extra"])
+    downloads.clear()
+    _, pushes = upload()
+    assert listings == [shard_uri]
+    assert downloads == ["extra"]
+    assert [push["uri"] for push in pushes[:-2]] == [f"{shard_uri}:{digests['extra']}"]
+    assert registry_tags == set(digests.values())
 
 
 def test_package_repo(mirror_instance):
