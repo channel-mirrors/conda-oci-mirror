@@ -101,7 +101,12 @@ class Mirror:
 
         for subdir, cache_dir in self.iter_subdirs():
             repo = repository.PackageRepo(
-                self.channel, subdir, cache_dir, self.registry, client=self.client
+                self.channel,
+                subdir,
+                cache_dir,
+                self.registry,
+                client=self.client,
+                mirror_shards=not self.packages,
             )
 
             # Run filter based on packages we are looking for, and forbidden

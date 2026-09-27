@@ -85,7 +85,8 @@ def test_publish_one_snapshot_with_distinct_layer_filenames(
     tmp_path, monkeypatch, preload
 ):
     repo = PackageRepo("test", "noarch", tmp_path, "example.com/test")
-    get = Mock(side_effect=[response(), response()])
+    # The channel has no shard index, so no shard layer is published.
+    get = Mock(side_effect=[response(), response(), response(404)])
     monkeypatch.setattr("conda_oci_mirror.repo.requests.get", get)
     monkeypatch.setattr(
         Pusher, "push", lambda self, uri: {"uri": uri, "layers": self.layers}
@@ -93,7 +94,7 @@ def test_publish_one_snapshot_with_distinct_layer_filenames(
     if preload:
         repo.load_repodata()
     pushed = repo.upload(tmp_path)
-    assert get.call_count == 2
+    assert get.call_count == 3
     assert all(call.kwargs["timeout"] == 60 for call in get.call_args_list)
     layers = pushed[0]["layers"]
     assert [layer["title"] for layer in layers] == [
@@ -160,7 +161,7 @@ def test_missing_optional_metadata_does_not_reuse_stale_file(tmp_path, monkeypat
     Path(repo.patches).write_text('{"packages": {"old": {}}}')
     monkeypatch.setattr(
         "conda_oci_mirror.repo.requests.get",
-        Mock(side_effect=[response(404), response()]),
+        Mock(side_effect=[response(404), response(), response(404)]),
     )
     assert list(repo.load_repodata().packages) == []
     assert not Path(repo.patches).exists()

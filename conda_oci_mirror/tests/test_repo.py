@@ -1,12 +1,18 @@
 #!/usr/bin/python
 
+import hashlib
+import json
 import os
 import sys
 import tarfile
 from pathlib import Path
 
+import msgpack
 import pytest
+import zstandard as zstd
 
+import conda_oci_mirror.defaults as defaults
+import conda_oci_mirror.repo as repository
 from conda_oci_mirror.logger import setup_logger
 from conda_oci_mirror.repo import PackageRepo, RepoData
 
@@ -30,6 +36,133 @@ class TestRepoData:
 
     def test_get_latest_tag(self, repo_data):
         assert repo_data.get_latest_tag("pytest") == "7.2.0-py310hbbe02a8_1"
+
+
+def test_upload_pushes_only_shards_missing_from_the_published_index(
+    tmp_path, monkeypatch
+):
+    shards = {name: name.encode() for name in ("old", "new")}
+    digests = {name: hashlib.sha256(data).hexdigest() for name, data in shards.items()}
+
+    def pack_index(names):
+        return zstd.ZstdCompressor().compress(
+            msgpack.packb(
+                {
+                    "info": {"base_url": "", "shards_base_url": ""},
+                    "shards": {name: bytes.fromhex(digests[name]) for name in names},
+                }
+            )
+        )
+
+    upstream = {"index": pack_index(["old"])}
+    downloads = []
+
+    class Response:
+        def __init__(self, content, status_code=200):
+            self.content = content
+            self.status_code = status_code
+            self.text = content.decode() if content.startswith(b"{") else ""
+
+        def raise_for_status(self):
+            if self.status_code != 200:
+                raise AssertionError(self.status_code)
+
+        def json(self):
+            return json.loads(self.text)
+
+    def get(url, **_):
+        if url.endswith("repodata.json"):
+            return Response(json.dumps({"packages": {}, "packages.conda": {}}).encode())
+        if url.endswith("repodata_from_packages.json"):
+            return Response(b"{}")
+        if url.endswith("repodata_shards.msgpack.zst"):
+            return Response(upstream["index"])
+        for name, digest in digests.items():
+            if url == f"https://conda.anaconda.org/test/linux-64/{digest}.msgpack.zst":
+                downloads.append(name)
+                return Response(shards[name])
+        raise AssertionError(f"unexpected URL: {url}")
+
+    class Client:
+        """Stands in for the registry; remembers the latest published manifest."""
+
+        def __init__(self):
+            self.latest = None
+
+        def get_optional_manifest(self, uri):
+            assert uri == "ghcr.io/example/test/linux-64/repodata.json:latest"
+            return self.latest
+
+        def download_blob(self, uri, digest, outfile):
+            layer = next(
+                layer for layer in self.latest["layers"] if layer["digest"] == digest
+            )
+            Path(outfile).write_bytes(Path(layer["path"]).read_bytes())
+            return outfile
+
+    client = Client()
+
+    class Pusher:
+        def __init__(self, root, timestamp, client=None):
+            self.layers = []
+            self.created_at = "2026.01.02.03.04"
+
+        def add_layer(self, path, media_type, title=None):
+            # Snapshot the content: the cached index is rewritten on the next run.
+            snapshot = (
+                tmp_path / "published" / hashlib.sha256(path.encode()).hexdigest()
+            )
+            snapshot.parent.mkdir(exist_ok=True)
+            snapshot.write_bytes(Path(path).read_bytes())
+            digest = f"sha256:{hashlib.sha256(snapshot.read_bytes()).hexdigest()}"
+            self.layers.append(
+                {
+                    "path": str(snapshot),
+                    "mediaType": media_type,
+                    "digest": digest,
+                    "title": title,
+                }
+            )
+
+        def push(self, uri):
+            if uri.endswith(":latest"):
+                client.latest = {"layers": self.layers}
+            return {"uri": uri, "layers": self.layers}
+
+    monkeypatch.setattr(repository.requests, "get", get)
+    monkeypatch.setattr(repository, "Pusher", Pusher)
+
+    def upload():
+        repo = PackageRepo(
+            "test", "linux-64", tmp_path, registry="ghcr.io/example", client=client
+        )
+        return repo, repo.upload(tmp_path)
+
+    # First run: nothing is published yet, so every shard is pushed first.
+    repo, pushes = upload()
+    shard_uri = "ghcr.io/example/test/linux-64/shards"
+    assert [push["uri"] for push in pushes[:-2]] == [f"{shard_uri}:{digests['old']}"]
+    assert pushes[0]["layers"][0]["mediaType"] == defaults.repodata_shard_media_type_v1
+    assert pushes[-1]["uri"] == "ghcr.io/example/test/linux-64/repodata.json:latest"
+    assert defaults.repodata_shards_media_type_v1 in {
+        layer["mediaType"] for layer in pushes[-1]["layers"]
+    }
+    mirrored_index = msgpack.unpackb(
+        zstd.ZstdDecompressor().decompress(Path(repo.shard_index).read_bytes()),
+        raw=False,
+    )
+    assert mirrored_index["info"]["base_url"] == ""
+    assert mirrored_index["info"]["shards_base_url"] == "./shards/"
+
+    # Second run with a fresh cache: only the shard missing from the published
+    # index is downloaded and pushed.
+    for path in Path(repo.shards_dir).iterdir():
+        path.unlink()
+    downloads.clear()
+    upstream["index"] = pack_index(["old", "new"])
+    _, pushes = upload()
+    assert downloads == ["new"]
+    assert [push["uri"] for push in pushes[:-2]] == [f"{shard_uri}:{digests['new']}"]
 
 
 def test_package_repo(mirror_instance):
