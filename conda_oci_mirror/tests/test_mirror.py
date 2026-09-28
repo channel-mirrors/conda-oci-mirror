@@ -72,8 +72,7 @@ def test_mirror(subdir, num_updates, package_name, mirror_instance):
     # and nothing else
     cache_subdir = os.path.join(cache_dir, m.channel, subdir)
     assert os.path.exists(cache_subdir)
-    assert "repodata.json" in os.listdir(cache_subdir)
-    assert len(os.listdir(cache_subdir)) == 1
+    assert set(os.listdir(cache_subdir)) == {"repodata.json", "repodata.json.zst"}
     repodata_file = os.path.join(cache_subdir, "repodata.json")
     repodata = repository.RepoData(repodata_file)
 
