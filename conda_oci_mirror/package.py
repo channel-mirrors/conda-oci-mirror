@@ -221,7 +221,13 @@ class Package:
             )
             util.mkdir_p(os.path.join(dest_dir, "info"))
             shutil.copy(info_archive, os.path.join(dest_dir, "info.tar.gz"))
-            shutil.copy(index_json, os.path.join(dest_dir, "info", "index.json"))
+            # Very old packages (e.g. gmp 5.1.2) predate the subdir field.
+            index = util.read_json(index_json)
+            if not index.get("subdir"):
+                index["subdir"] = self.subdir
+                util.write_json(index, os.path.join(dest_dir, "info", "index.json"))
+            else:
+                shutil.copy(index_json, os.path.join(dest_dir, "info", "index.json"))
 
     @classretry
     def upload(self, dry_run=False, extra_tags=None, timestamp=None):
@@ -241,7 +247,6 @@ class Package:
 
         with tempfile.TemporaryDirectory() as staging_dir:
             pusher = Pusher(staging_dir, timestamp=timestamp, client=self.client)
-            upload_files_path = pathlib.Path(staging_dir)
             shutil.copy(self.file, staging_dir)
 
             # Prepare metadata in same staging directory
@@ -285,18 +290,6 @@ class Package:
                 return items
 
             name = self.package_name_bare
-            version_and_build = self.tag
-            index_file = os.path.join(
-                upload_files_path, self.package_name, "info", "index.json"
-            )
-            index = util.read_json(index_file)
-
-            # The index must contain the subdirectory
-            subdir = index.get("subdir")
-            if not subdir:
-                raise ValueError(
-                    f"info.json for {name}@{version_and_build} doesn't contain subdir!"
-                )
 
             # Push main tag and extras using the same spelling as registry reads.
             for tag in [self.tag] + list(extra_tags):
