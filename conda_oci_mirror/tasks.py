@@ -19,8 +19,6 @@ class TaskBase:
         """
         Wait the appropriate timeout for the last upload time.
         """
-        global last_upload_time
-
         with last_upload_time.get_lock():
             lt = last_upload_time.value
             now = time.time()
@@ -46,8 +44,6 @@ class RepoUploadTask(TaskBase):
         """
         Run the repo task, uploading the data and taking a pause if needed.
         """
-        global package_counter, counter_start
-
         # Wait based on the last upload time across tasks
         self.wait()
 
@@ -82,8 +78,6 @@ class PackageUploadTask(TaskBase):
         3. Upload the package (or emulating it)
         """
         self.pkg.ensure_file()
-
-        global package_counter, counter_start
 
         # Wait based on the last upload time across tasks
         self.wait(self.wait_time)
@@ -173,7 +167,6 @@ class TaskRunner:
         """
         Run tasks in serial (this is intended for debugging mostly)
         """
-        global counter_start
         with counter_start.get_lock():
             counter_start.value = time.time()
 
@@ -201,7 +194,6 @@ class TaskRunner:
         """
         Run the tasks!
         """
-        global counter_start
         with counter_start.get_lock():
             counter_start.value = time.time()
 

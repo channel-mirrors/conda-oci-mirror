@@ -196,7 +196,6 @@ from conda_oci_mirror.mirror import Mirror
 mirror = Mirror(
     channel="conda-forge",
     packages=["redo"],
-
     # Push repodata and packages to this registry
     registry="http://127.0.0.1:5000/dinosaur",
     subdirs=["noarch"],
@@ -217,7 +216,6 @@ from conda_oci_mirror.mirror import Mirror
 mirror = Mirror(
     channel="conda-forge",
     packages=["redo"],
-
     # Push repodata and packages to this registry
     registry="http://127.0.0.1:5000/dinosaur",
     subdirs=["noarch"],
@@ -238,7 +236,6 @@ from conda_oci_mirror.mirror import Mirror
 mirror = Mirror(
     channel="conda-forge",
     packages=["redo"],
-
     # Push repodata and packages to this registry
     registry="http://127.0.0.1:5000/dinosaur",
     subdirs=["noarch"],
@@ -281,8 +278,10 @@ We would create a package repo as follows:
 from conda_oci_mirror.repo import PackageRepo
 import os
 
-cache_dir = os.path.join(os.getcwd(), 'cache')
-repo = PackageRepo('conda-forge', 'linux-64', cache_dir, registry='http://127.0.0.1:5000/dinosaur')
+cache_dir = os.path.join(os.getcwd(), "cache")
+repo = PackageRepo(
+    "conda-forge", "linux-64", cache_dir, registry="http://127.0.0.1:5000/dinosaur"
+)
 ```
 
 Now let's retrieve the index.json. You need the exact tag you are interested in - there
@@ -365,7 +364,7 @@ $ conda-oci mirror --channel conda-forge --package testinfra --registry http://1
 And run tests:
 
 ```bash
-$ pytest -xs conda_oci_mirror/tests/*.py
+$ pixi run test
 ```
 
 To use an already-running test registry instead of starting Docker containers, set
@@ -375,15 +374,9 @@ See [TODO.md](TODO.md) for some questions and items to do.
 
 ### Linting
 
-We use pre-commit for linting. You can install dependencies and run it:
+We use [ruff](https://docs.astral.sh/ruff/) for linting and formatting, run through [pixi](https://pixi.sh):
 
 ```bash
-$ pip install -r .github/dev-requirements.txt
-$ pre-commit run --all-files
-```
-
-Or install to the repository so it always runs before commit!
-
-```bash
-$ pre-commit install
+$ pixi run lint  # check
+$ pixi run fmt   # fix and format
 ```

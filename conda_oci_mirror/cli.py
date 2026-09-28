@@ -2,7 +2,7 @@ import os
 
 import click
 
-import conda_oci_mirror.defaults as defaults
+from conda_oci_mirror import defaults
 from conda_oci_mirror.logger import setup_logger
 from conda_oci_mirror.mirror import Mirror
 

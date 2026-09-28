@@ -11,18 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v3
-      - name: Check Spelling
-        uses: crate-ci/typos@07d900b8fa1097806b8adb6391b0d3e0ac2fdea7 # v1.39.0
+      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
         with:
-          files: ./README.md
-      - name: Install Conda environment from environment.yml
-        uses: mamba-org/setup-micromamba@add3a49764cedee8ee24e82dfde87f5bc2914462 # v2.0.7
-        with:
-          environment-file: environment.yml
+          pixi-version: v0.81.0
+          environments: lint
       - name: Lint Conda Oci Mirror
-        shell: bash -el {0}
-        run: |
-          pre-commit run --all-files
+        run: pixi run lint
 
   testing:
     runs-on: ubuntu-latest
@@ -35,19 +29,14 @@ jobs:
           - 5000:5000
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v3
-      - name: Install Conda environment from environment.yml
-        uses: mamba-org/setup-micromamba@add3a49764cedee8ee24e82dfde87f5bc2914462 # v2.0.7
+      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
         with:
-          environment-file: environment.yml
+          pixi-version: v0.81.0
       - name: Test Conda OCI Mirror
-        shell: bash -el {0}
         env:
           registry_host: http://localhost
           registry_port: ${{ job.services.registry.ports[5000] }}
-        run: |
-          micromamba install conda-build -c conda-forge
-          pip install .
-          pytest -xs conda_oci_mirror/tests/*.py
+        run: pixi run test
 
   mirror-pkgs:
     runs-on: ubuntu-latest
@@ -73,18 +62,12 @@ jobs:
       fail-fast: true
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v3
-      - name: Install Conda environment from environment.yml
-        uses: mamba-org/setup-micromamba@add3a49764cedee8ee24e82dfde87f5bc2914462 # v2.0.7
+      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
         with:
-          environment-file: environment.yml
-      - name: Install Conda Oci Mirror
-        shell: bash -el {0}
-        run: |
-          micromamba install conda-build
-          pip install -e .
+          pixi-version: v0.81.0
 
       - name: Test Conda Oci Mirror
-        shell: bash -el {0}
+        shell: pixi run bash -e {0}
         env:
           channel: conda-forge
           subdir: ${{ matrix.subdir }}

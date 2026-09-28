@@ -13,8 +13,7 @@ import tempfile
 import requests
 from conda_package_handling import api
 
-import conda_oci_mirror.defaults as defaults
-import conda_oci_mirror.util as util
+from conda_oci_mirror import defaults, util
 from conda_oci_mirror.decorators import classretry, retry
 from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import Pusher, get_oras_client, registry_name
@@ -48,10 +47,7 @@ def check_checksum(path, package_dict):
         for byte_block in iter(lambda: f.read(4096), b""):
             hash_func.update(byte_block)
 
-    if hash_func.hexdigest() != expected:
-        return False
-    else:
-        return True
+    return hash_func.hexdigest() == expected
 
 
 def _download_file_once(url, dest, checksum_content=None, chunk_size=8192):
@@ -65,8 +61,7 @@ def _download_file_once(url, dest, checksum_content=None, chunk_size=8192):
         with requests.get(url, stream=True, allow_redirects=True, timeout=60) as r:
             r.raise_for_status()
             with open(staged, "wb") as f:
-                for chunk in r.iter_content(chunk_size=chunk_size):
-                    f.write(chunk)
+                f.writelines(r.iter_content(chunk_size=chunk_size))
 
         if checksum_content and not check_checksum(staged, checksum_content):
             raise RuntimeError(f"Checksum mismatch downloading {url}")
@@ -156,7 +151,7 @@ class Package:
             # Download the file and return its path (default is to stream)
             try:
                 self.file = download_file(urls[0], dest, self.package_info)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - fall back on any error
                 logger.warning(
                     f"Main URL {urls[0]} failed. Retrying with fallback {urls[1]}. "
                     f"{exc.__class__.__name__}: {exc}"
@@ -243,7 +238,7 @@ class Package:
 
         # If we are not given an iterable
         if not isinstance(extra_tags, (list, set, tuple)):
-            extra_tags = set([extra_tags])
+            extra_tags = {extra_tags}
 
         with tempfile.TemporaryDirectory() as staging_dir:
             pusher = Pusher(staging_dir, timestamp=timestamp, client=self.client)

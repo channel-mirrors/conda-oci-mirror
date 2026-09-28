@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 import os
 import sys
 
@@ -74,8 +72,7 @@ def test_mirror(subdir, num_updates, package_name, mirror_instance):
     # and nothing else
     cache_subdir = os.path.join(cache_dir, m.channel, subdir)
     assert os.path.exists(cache_subdir)
-    "repodata.json" in os.listdir(cache_subdir)
-    len(os.listdir(cache_subdir)) == 1
+    assert set(os.listdir(cache_subdir)) == {"repodata.json", "repodata.json.zst"}
     repodata_file = os.path.join(cache_subdir, "repodata.json")
     repodata = repository.RepoData(repodata_file)
 
@@ -101,7 +98,7 @@ def test_mirror(subdir, num_updates, package_name, mirror_instance):
     assert os.path.exists(result[0])
 
     # It should be the same file!
-    os.stat(result[0]).st_size == os.stat(repodata_file).st_size
+    assert os.stat(result[0]).st_size == os.stat(repodata_file).st_size
     package_names = repodata.package_names
 
     # Testing mirror has xtensor, except if only 2

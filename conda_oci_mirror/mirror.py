@@ -4,12 +4,9 @@ import pathlib
 
 import requests
 
-import conda_oci_mirror.decorators as decorators
-import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.package as pkg
 import conda_oci_mirror.repo as repository
-import conda_oci_mirror.tasks as tasks
-import conda_oci_mirror.util as util
+from conda_oci_mirror import decorators, defaults, tasks, util
 from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import get_oras_client, registry_name
 
@@ -255,7 +252,7 @@ class Mirror:
             logger.info(f"Found {len(new_packages)} packages")
 
             # Push with an updated timestamp
-            timestamp = datetime.datetime.now().strftime("%Y.%m.%d.%H%M%S")
+            timestamp = datetime.datetime.now().astimezone().strftime("%Y.%m.%d.%H%M%S")
 
             # Upload new packages
             for package_name in new_packages:

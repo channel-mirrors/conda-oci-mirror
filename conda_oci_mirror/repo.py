@@ -14,9 +14,7 @@ import requests
 import zstandard as zstd
 from rattler import Version
 
-import conda_oci_mirror.decorators as decorators
-import conda_oci_mirror.defaults as defaults
-import conda_oci_mirror.util as util
+from conda_oci_mirror import decorators, defaults, util
 from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import Pusher, get_oras_client, registry_name
 from conda_oci_mirror.package import (
@@ -63,8 +61,7 @@ class RepoData:
         Yield all package types, the filename and info
         """
         for key in self.package_types:
-            for package_file, info in self.data.get(key, {}).items():
-                yield package_file, info
+            yield from self.data.get(key, {}).items()
 
     @property
     def package_archives(self):
@@ -109,7 +106,7 @@ class RepoData:
         """
         Return unique set of package names
         """
-        return set(x[1]["name"] for x in self.packages)
+        return {x[1]["name"] for x in self.packages}
 
     def latest_packages(self, names=None):
         """Select the newest version/build per name and archive format in one scan."""
@@ -273,7 +270,7 @@ class PackageRepo:
 
         # Try for latest .conda version first
         res = None
-        for _, media_type in package_extensions.items():
+        for media_type in package_extensions.values():
             res = self.client.pull_by_media_type(container, self.cache_dir, media_type)
             if res:
                 break
@@ -290,7 +287,7 @@ class PackageRepo:
         """
         Ensure we have a timestamp when it was downloaded.
         """
-        self.timestamp = datetime.datetime.now()
+        self.timestamp = datetime.datetime.now().astimezone()
 
     def ensure_repodata(self):
         """
@@ -652,4 +649,4 @@ class PackageRepo:
                 for tag in tags
                 if self.has_package_format(package, tag, package_ext, registry)
             ]
-        return set(f"{package}-{tag}.{package_ext}" for tag in tags)
+        return {f"{package}-{tag}.{package_ext}" for tag in tags}

@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 import hashlib
 import json
 import os
@@ -11,8 +9,8 @@ import msgpack
 import pytest
 import zstandard as zstd
 
-import conda_oci_mirror.defaults as defaults
 import conda_oci_mirror.repo as repository
+from conda_oci_mirror import defaults
 from conda_oci_mirror.logger import setup_logger
 from conda_oci_mirror.repo import PackageRepo, RepoData
 
@@ -260,8 +258,7 @@ def test_package_repo(mirror_instance):
         }
         for member in members:
             print(f"Found zlib info member {member.name}")
-            if member.name in should_find:
-                should_find.remove(member.name)
+            should_find.discard(member.name)
 
         if should_find:
             raise ValueError(f"Expected to find {should_find} in info, but did not.")
@@ -270,5 +267,5 @@ def test_package_repo(mirror_instance):
         pkg = repo.get_package(package_name)
 
         # Find the layer with the media type
-        layer = [x for x in result["layers"] if "conda.package" in x["media_type"]][0]
+        layer = next(x for x in result["layers"] if "conda.package" in x["media_type"])
         assert os.path.basename(layer["path"]) == os.path.basename(pkg)

@@ -66,7 +66,7 @@ def compress_folder(source_dir, output_filename):
     """
     Compress a directory to an output destination
     """
-    if not platform.system() == "Windows":
+    if platform.system() != "Windows":
         return subprocess.run(
             f"tar -cvzf {output_filename} *",
             cwd=source_dir,

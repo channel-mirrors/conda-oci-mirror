@@ -37,12 +37,11 @@ dynamic = ["version"]
 [project.scripts]
 conda-oci = "conda_oci_mirror.cli:main"
 
+[tool.setuptools.packages.find]
+include = ["conda_oci_mirror*"]
+
 [tool.setuptools_scm]
 write_to = "conda_oci_mirror/_version.py"
 
-[tool.isort]
-profile = "black"
-skip = []
-
-[tool.black]
-exclude = "^env/"
+[tool.ruff]
+extend-exclude = ["env"]
