@@ -32,7 +32,7 @@ def show_record_diffs(subdir, ref_repodata, new_repodata):
             ref_lines = json.dumps(ref_pkg, indent=2).splitlines()
             new_lines = json.dumps(new_pkg, indent=2).splitlines()
             for ln in difflib.unified_diff(ref_lines, new_lines, n=0, lineterm=""):
-                if ln.startswith("+++") or ln.startswith("---") or ln.startswith("@@"):
+                if ln.startswith(("+++", "---", "@@")):
                     continue
                 print(ln)
 

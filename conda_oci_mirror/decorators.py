@@ -30,7 +30,7 @@ def retry(attempts, timeout=2):
             while attempt < attempts:
                 try:
                     return func(*args, **kwargs)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 - retry on any error
                     sleep = timeout + 3**attempt
                     logger.info(f"Retrying in {sleep} seconds - error: {e}")
                     time.sleep(sleep)
@@ -60,7 +60,7 @@ class classretry(Decorator):
         while attempt < attempts:
             try:
                 return self.func(cls, *args, **kwargs)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - retry on any error
                 sleep = timeout + 3**attempt
                 logger.info(f"Retrying in {sleep} seconds - error: {e}")
                 time.sleep(sleep)

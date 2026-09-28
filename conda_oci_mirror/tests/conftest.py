@@ -1,11 +1,14 @@
+from __future__ import annotations
+
 import os
 import sys
 import uuid
+from typing import ClassVar
 
 import pytest
 from xprocess import ProcessStarter
 
-import conda_oci_mirror.defaults as defaults
+from conda_oci_mirror import defaults
 from conda_oci_mirror.mirror import Mirror
 
 # The setup.cfg doesn't install the main module proper
@@ -68,7 +71,7 @@ def oci_registry(xprocess):
         pattern = r".*listening on \[::\]:5000.*"
 
         # command to start process
-        args = [
+        args: ClassVar[list[str]] = [
             "docker",
             "run",
             "--rm",

@@ -10,8 +10,7 @@ import oras.provider
 import requests
 from oras.decorator import ensure_container
 
-import conda_oci_mirror.defaults as defaults
-import conda_oci_mirror.util as util
+from conda_oci_mirror import defaults, util
 from conda_oci_mirror.logger import logger
 
 
@@ -61,7 +60,7 @@ class Pusher:
         self.client = client
         self.root = root
         self.layers = []
-        self.timestamp = timestamp or datetime.datetime.now()
+        self.timestamp = timestamp or datetime.datetime.now().astimezone()
 
     @property
     def created_at(self):
