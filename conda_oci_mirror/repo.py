@@ -377,7 +377,10 @@ class PackageRepo:
         uri = f"{registry}/{self.channel}/{self.subdir}/repodata.json:latest"
         manifest = client.get_optional_manifest(uri) or {}
         for layer in manifest.get("layers", []):
-            if layer["mediaType"] != defaults.repodata_shards_media_type_v1:
+            if layer["mediaType"] not in (
+                defaults.repodata_shards_media_type_v1,
+                defaults.legacy_repodata_shards_media_type_v1,
+            ):
                 continue
             with tempfile.TemporaryDirectory() as tmp:
                 path = client.download_blob(

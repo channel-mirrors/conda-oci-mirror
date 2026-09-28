@@ -7,8 +7,13 @@ package_tarbz2_media_type = "application/vnd.conda.package.v1"
 package_conda_media_type = "application/vnd.conda.package.v2"
 repodata_media_type_v1 = "application/vnd.conda.repodata.v1+json"
 repodata_media_type_v1_zst = "application/vnd.conda.repodata.v1+json+zst"
-repodata_shards_media_type_v1 = "application/vnd.conda.repodata.shards.v1+msgpack+zstd"
-repodata_shard_media_type_v1 = "application/vnd.conda.repodata.shard.v1+msgpack+zstd"
+repodata_shards_media_type_v1 = "application/vnd.conda.repodata.shards.v1+msgpack+zst"
+repodata_shard_media_type_v1 = "application/vnd.conda.repodata.shard.v1+msgpack+zst"
+# Shard index media type published before the switch to the "+zst" suffix. Still
+# read so that the first run after the switch does not list every shard tag.
+legacy_repodata_shards_media_type_v1 = (
+    "application/vnd.conda.repodata.shards.v1+msgpack+zstd"
+)
 
 CACHE_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__))) / "cache"
 

@@ -190,6 +190,20 @@ def test_upload_pushes_only_shards_missing_from_the_published_index(
     assert [push["uri"] for push in pushes[:-2]] == [f"{shard_uri}:{digests['extra']}"]
     assert registry_tags == set(digests.values())
 
+    # An index published with the legacy "+zstd" media type still counts, so the
+    # first run after the switch to "+zst" does not list the shard tags.
+    for layer in client.latest["layers"]:
+        if layer["mediaType"] == defaults.repodata_shards_media_type_v1:
+            layer["mediaType"] = defaults.legacy_repodata_shards_media_type_v1
+    listings.clear()
+    downloads.clear()
+    _, pushes = upload()
+    assert listings == []
+    assert downloads == []
+    assert defaults.repodata_shards_media_type_v1 in {
+        layer["mediaType"] for layer in pushes[-1]["layers"]
+    }
+
 
 def test_package_repo(mirror_instance):
     """
