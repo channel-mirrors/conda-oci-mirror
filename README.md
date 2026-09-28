@@ -364,7 +364,7 @@ $ conda-oci mirror --channel conda-forge --package testinfra --registry http://1
 And run tests:
 
 ```bash
-$ pytest -xs conda_oci_mirror/tests/*.py
+$ pixi run test
 ```
 
 To use an already-running test registry instead of starting Docker containers, set
@@ -374,15 +374,9 @@ See [TODO.md](TODO.md) for some questions and items to do.
 
 ### Linting
 
-We use pre-commit for linting. You can install dependencies and run it:
+We use [ruff](https://docs.astral.sh/ruff/) for linting and formatting, run through [pixi](https://pixi.sh):
 
 ```bash
-$ pip install -r .github/dev-requirements.txt
-$ pre-commit run --all-files
-```
-
-Or install to the repository so it always runs before commit!
-
-```bash
-$ pre-commit install
+$ pixi run lint  # check
+$ pixi run fmt   # fix and format
 ```

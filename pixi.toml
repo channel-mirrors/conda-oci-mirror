@@ -1,0 +1,39 @@
+[workspace]
+name = "conda-oci-mirror"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64"]
+
+[dependencies]
+python = "3.10.*"
+click = "*"
+requests = "*"
+oras-py = "0.1.14.*"
+conda-package-handling = "*"
+zstandard = "*"
+msgpack-python = "*"
+py-rattler = ">=0.15"
+setuptools = "*"
+setuptools-scm = "*"
+
+[pypi-dependencies]
+conda-oci-mirror = { path = ".", editable = true }
+
+[feature.test.dependencies]
+conda-build = "*"
+pytest = "*"
+pytest-xprocess = "*"
+
+[feature.test.tasks]
+test = "pytest -xs conda_oci_mirror/tests"
+
+[feature.lint.dependencies]
+ruff = "*"
+typos = "*"
+
+[feature.lint.tasks]
+lint = "ruff check conda_oci_mirror && ruff format --check conda_oci_mirror README.md && typos README.md"
+fmt = "ruff check --fix conda_oci_mirror && ruff format conda_oci_mirror README.md"
+
+[environments]
+default = ["test"]
+lint = { features = ["lint"], no-default-feature = true }
