@@ -226,30 +226,34 @@ def test_manifest_is_refreshed_between_pulls(tmp_path, monkeypatch):
     download.assert_called_once()
 
 
-def test_invalid_package_metadata_raises(tmp_path, monkeypatch):
-    archive = tmp_path / "demo-1.0-0.conda"
+@pytest.mark.parametrize(
+    "index, expected",
+    [
+        ({}, {"subdir": "osx-64"}),
+        ({"subdir": "noarch"}, {"subdir": "noarch"}),
+    ],
+)
+def test_prepare_metadata_fills_missing_subdir(tmp_path, monkeypatch, index, expected):
+    archive = tmp_path / "gmp-5.1.2-6.tar.bz2"
     archive.write_bytes(b"archive")
     package = Package(
         "test",
-        "noarch",
+        "osx-64",
         archive.name,
         tmp_path,
         "example.com/test",
         existing_file=str(archive),
     )
 
-    def metadata(self, stage):
-        root = Path(stage) / self.package_name
-        (root / "info").mkdir(parents=True)
-        (root / "info" / "index.json").write_text("{}")
-        (root / "info.tar.gz").write_bytes(b"metadata")
+    def extract(file, dest, components):
+        (Path(dest) / "info").mkdir(parents=True)
+        (Path(dest) / "info" / "index.json").write_text(json.dumps(index))
 
-    monkeypatch.setattr(Package, "prepare_metadata", metadata)
-    push = Mock()
-    monkeypatch.setattr(Pusher, "push", push)
-    with pytest.raises(ValueError, match="doesn't contain subdir"):
-        package.upload()
-    push.assert_not_called()
+    monkeypatch.setattr("conda_oci_mirror.package.api.extract", extract)
+    stage = tmp_path / "stage"
+    package.prepare_metadata(str(stage))
+    staged = stage / package.package_name / "info" / "index.json"
+    assert json.loads(staged.read_text()) == expected
 
 
 def test_dropped_connection_retries_only_the_failed_metadata_push(
