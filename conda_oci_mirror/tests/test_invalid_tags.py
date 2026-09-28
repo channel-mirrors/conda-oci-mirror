@@ -96,9 +96,9 @@ def test_skip_bad_builds_but_finish_valid_work(
     monkeypatch.setattr(PackageRepo, "load_repodata", lambda *args: data)
 
     def tags(client, uri, **kwargs):
-        assert uri.endswith(
-            "/healthy"
-        ), "Invalid builds must be skipped before registry queries"
+        assert uri.endswith("/healthy"), (
+            "Invalid builds must be skipped before registry queries"
+        )
         return []
 
     monkeypatch.setattr(Registry, "get_tags", tags)

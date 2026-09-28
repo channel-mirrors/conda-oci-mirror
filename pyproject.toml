@@ -40,9 +40,10 @@ conda-oci = "conda_oci_mirror.cli:main"
 [tool.setuptools_scm]
 write_to = "conda_oci_mirror/_version.py"
 
-[tool.isort]
-profile = "black"
-skip = []
+[tool.ruff]
+extend-exclude = ["env"]
 
-[tool.black]
-exclude = "^env/"
+[tool.ruff.lint]
+# pycodestyle, pyflakes and isort, matching the previous flake8/isort setup
+select = ["E", "W", "F", "I"]
+ignore = ["E501"]

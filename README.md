@@ -196,7 +196,6 @@ from conda_oci_mirror.mirror import Mirror
 mirror = Mirror(
     channel="conda-forge",
     packages=["redo"],
-
     # Push repodata and packages to this registry
     registry="http://127.0.0.1:5000/dinosaur",
     subdirs=["noarch"],
@@ -217,7 +216,6 @@ from conda_oci_mirror.mirror import Mirror
 mirror = Mirror(
     channel="conda-forge",
     packages=["redo"],
-
     # Push repodata and packages to this registry
     registry="http://127.0.0.1:5000/dinosaur",
     subdirs=["noarch"],
@@ -238,7 +236,6 @@ from conda_oci_mirror.mirror import Mirror
 mirror = Mirror(
     channel="conda-forge",
     packages=["redo"],
-
     # Push repodata and packages to this registry
     registry="http://127.0.0.1:5000/dinosaur",
     subdirs=["noarch"],
@@ -281,8 +278,10 @@ We would create a package repo as follows:
 from conda_oci_mirror.repo import PackageRepo
 import os
 
-cache_dir = os.path.join(os.getcwd(), 'cache')
-repo = PackageRepo('conda-forge', 'linux-64', cache_dir, registry='http://127.0.0.1:5000/dinosaur')
+cache_dir = os.path.join(os.getcwd(), "cache")
+repo = PackageRepo(
+    "conda-forge", "linux-64", cache_dir, registry="http://127.0.0.1:5000/dinosaur"
+)
 ```
 
 Now let's retrieve the index.json. You need the exact tag you are interested in - there
