@@ -179,6 +179,7 @@ class PackageRepo:
         client=None,
         mirror_shards=True,
         shard_workers=2,
+        repush_shards=False,
     ):
         self.channel = channel
         self.subdir = subdir
@@ -190,6 +191,7 @@ class PackageRepo:
         self.errors = []
         self.mirror_shards = mirror_shards
         self.shard_workers = shard_workers
+        self.repush_shards = repush_shards
         self.source_shards_url = None
 
         # Can be over-ridden by upload/tags/packages functions if desired
@@ -430,9 +432,13 @@ class PackageRepo:
 
         with open(self.shard_index, "rb") as index_file:
             digests = shard_digests(read_shard_index(index_file.read()))
-        existing = self.get_published_shard_digests(registry, client)
-        if not existing:
-            existing = self.get_pushed_shard_digests(registry, client)
+        if self.repush_shards:
+            # Rewrite every shard manifest, e.g. after a shard media type change.
+            existing = set()
+        else:
+            existing = self.get_published_shard_digests(registry, client)
+            if not existing:
+                existing = self.get_pushed_shard_digests(registry, client)
         new_digests = sorted(digests - existing)
         logger.info(f"  {len(new_digests)} of {len(digests)} repodata shards are new")
         if not new_digests:

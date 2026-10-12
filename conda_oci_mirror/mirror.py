@@ -40,6 +40,7 @@ class Mirror:
         workers=4,
         timeout=700,
         shard_workers=2,
+        repush_shards=False,
     ):
         self.channel = channel
         self.subdirs = subdirs or defaults.DEFAULT_SUBDIRS
@@ -66,6 +67,7 @@ class Mirror:
         # Set the number of workers
         self.workers = workers
         self.shard_workers = shard_workers
+        self.repush_shards = repush_shards
 
         # Set the timeout
         self.timeout = timeout / 1000.0
@@ -107,6 +109,7 @@ class Mirror:
                 client=self.client,
                 mirror_shards=not self.packages,
                 shard_workers=self.shard_workers,
+                repush_shards=self.repush_shards,
             )
 
             # Run filter based on packages we are looking for, and forbidden
