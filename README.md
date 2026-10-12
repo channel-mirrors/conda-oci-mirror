@@ -1,9 +1,61 @@
 # Conda OCI Mirror
 
-Welcome to the Conda Forge Mirror python module! We use this module
-to retrieve and update conda mirror packages. You can see it being used
-in the wild [here](https://github.com/channel-mirrors/mirrormirror/blob/main/.github/workflows/main.yml)
-and brief usage is shown below.
+`conda-oci-mirror` copies conda channels into an OCI registry (such as `ghcr.io`), and pulls
+packages from such a registry back into a local cache. It provides the `conda-oci` command line tool
+and a Python API.
+
+[mirrormirror](https://github.com/channel-mirrors/mirrormirror) uses it to mirror
+conda-forge and bioconda to `ghcr.io/channel-mirrors`, see [What is mirrored](#what-is-mirrored).
+
+## What is mirrored
+
+### Contents of a mirror
+
+For each subdir of a channel, `conda-oci mirror`:
+
+1. downloads the channel's `repodata.json` and, when the channel provides it, the sharded repodata index `repodata_shards.msgpack.zst`;
+2. pushes every package archive that is not yet in the registry, one OCI tag per package build;
+3. pushes the repodata shards that are new since the last run;
+4. publishes the repodata snapshot, only after all package uploads succeeded.
+
+Packages that conda-forge marks as undistributable
+([`repodata-tools` metadata](https://github.com/conda-forge/repodata-tools/blob/main/repodata_tools/metadata.json))
+are never mirrored from conda-forge. Without `--subdir`, these subdirs are mirrored:
+`linux-64`, `osx-64`, `osx-arm64`, `win-64`, `linux-aarch64`, `linux-ppc64le` and `noarch`.
+
+Each package build is stored at:
+
+```text
+<registry>/<channel>/<subdir>/<name>:<version>-<build>
+```
+
+for example `ghcr.io/channel-mirrors/conda-forge/linux-64/zlib:1.2.11-0`. Characters that OCI tags
+do not allow are encoded: `+` becomes `__p__`, `!` becomes `__e__` and `=` becomes `__eq__`. Package
+names starting with `_` get a `zzz` prefix (`_openmp_mutex` is stored as `zzz_openmp_mutex`), since
+OCI repository names cannot start with `_`.
+
+The manifest of a package tag has these layers:
+
+| Layer | Media type |
+| --- | --- |
+| `<name>-<version>-<build>.conda` | `application/vnd.conda.package.v2` |
+| `<name>-<version>-<build>.tar.bz2` | `application/vnd.conda.package.v1` |
+| `info.tar.gz` (the package's `info/` directory) | `application/vnd.conda.info.v1.tar+gzip` |
+| `info/index.json` | `application/vnd.conda.info.index.v1+json` |
+
+A tag holds the `.conda` archive, the `.tar.bz2` archive, or both, depending on what upstream
+publishes. Archive layers carry an `org.conda.md5` annotation. The `info` layers let clients read
+package metadata without downloading the archive.
+
+Repodata and shards are stored as described in [OCI channel layout](#oci-channel-layout).
+
+### mirrormirror
+
+[mirrormirror](https://github.com/channel-mirrors/mirrormirror) runs `conda-oci mirror` on GitHub
+Actions every 6 hours. It mirrors all packages of conda-forge and bioconda to
+`ghcr.io/channel-mirrors`, one subdir at a time, for `linux-64`, `linux-aarch64`, `linux-ppc64le`,
+`linux-riscv64`, `linux-s390x`, `osx-64`, `osx-arm64`, `win-64`, `win-32`, `win-arm64` and `noarch`
+(bioconda only for the subdirs it publishes). It pins the version of this repository in its `pixi.lock`.
 
 ## Concepts
 
@@ -83,20 +135,34 @@ more expensive than normal mirror planning. Registry authorization and server er
 
 ### Install
 
-Python 3.8 or newer is required. Conda version ordering uses `py-rattler`, not PEP 440 ordering.
-
-Create a new environment:
-
-```bash
-$ python -m venv env
-$ source env/bin/activate
-```
-
-And install:
+The easiest way to get a working environment is [pixi](https://pixi.sh), which installs Python and
+all dependencies from conda-forge as pinned in `pixi.lock`:
 
 ```bash
-$ pip install -e .
+$ git clone https://github.com/channel-mirrors/conda-oci-mirror
+$ cd conda-oci-mirror
+$ pixi run conda-oci --help
 ```
+
+This installs the repository in editable mode. Use `pixi shell` to get a shell with `conda-oci` on the `PATH`.
+
+To use it from another pixi project, as mirrormirror does, add it as a Git dependency in `pixi.toml`:
+
+```toml
+[pypi-dependencies]
+conda-oci-mirror = { git = "https://github.com/channel-mirrors/conda-oci-mirror.git", branch = "main" }
+```
+
+Alternatively, install the latest release from PyPI with pip, into an environment with Python 3.8 or newer:
+
+```bash
+$ pip install conda-oci-mirror
+```
+
+or the current `main` with `pip install git+https://github.com/channel-mirrors/conda-oci-mirror.git`.
+
+Releases are published to PyPI by the `Publish to PyPI` workflow when a GitHub release is created,
+for example with `gh release create v0.3.1 --target main --generate-notes`. The version comes from the tag.
 
 ### Authentication
 
@@ -333,7 +399,7 @@ Note that we first try to get the new format (.conda) and fall back to .tar.bz2.
 ### Development
 
 If you want to test pushing to packages, make sure to export your credentials first,
-as discussed above. Then ensure that `--user` is targeting your GitHub user or organizational
+as discussed above. Then ensure that `--registry` is targeting your GitHub user or organizational
 account to push to:
 
 ```bash
@@ -363,7 +429,7 @@ will fall back to insecure mode given that you've provided http://.
 $ conda-oci mirror --channel conda-forge --package testinfra --registry http://127.0.0.0:5000/dinosaur --subdir noarch
 ```
 
-And run tests:
+And run tests (this needs Docker for the test registry, unless `CONDA_OCI_TEST_REGISTRY` is set):
 
 ```bash
 $ pixi run test
