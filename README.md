@@ -153,13 +153,16 @@ To use it from another pixi project, as mirrormirror does, add it as a Git depen
 conda-oci-mirror = { git = "https://github.com/channel-mirrors/conda-oci-mirror.git", branch = "main" }
 ```
 
-Alternatively, install it with pip into an environment with Python 3.8 or newer:
+Alternatively, install the latest release from PyPI with pip, into an environment with Python 3.8 or newer:
 
 ```bash
-$ pip install git+https://github.com/channel-mirrors/conda-oci-mirror.git
+$ pip install conda-oci-mirror
 ```
 
-The release on PyPI is older than `main`, so install from Git to get the current registry layout.
+or the current `main` with `pip install git+https://github.com/channel-mirrors/conda-oci-mirror.git`.
+
+Releases are published to PyPI by the `Publish to PyPI` workflow when a GitHub release is created,
+for example with `gh release create v0.3.1 --target main --generate-notes`. The version comes from the tag.
 
 ### Authentication
 
