@@ -45,6 +45,8 @@ The shards repository is nested under `repodata.json` so it can never collide wi
 
 Shards are pushed before the index that references them. Each run compares the upstream index with the one published at `repodata.json:latest` and only downloads and pushes shards the published index does not already reference, so the registry's tags are not listed. Until the first index is published, the shard tags are listed once so that an interrupted first push resumes where it stopped. Shards are uploaded by `--shard-workers` threads (default 2); keep this low to avoid overloading the registry.
 
+`--repush-shards` pushes every shard in the index again, not only new ones. Use it once after a change to the shard manifests, such as the switch of the shard media type from `+zstd` to `+zst`: shards that are already published are otherwise never pushed again and keep their old manifests. The blobs are unchanged, so this rewrites one manifest per shard. A run with this flag does not resume, so if it is cut off, run it again with the flag.
+
 Shards are mirrored only for complete channel mirrors. A package-filtered mirror cannot publish the upstream shard index because it would reference packages that were not mirrored.
 
 ### Pull Cache

@@ -144,9 +144,14 @@ def test_upload_pushes_only_shards_missing_from_the_published_index(
     monkeypatch.setattr(repository.requests, "get", get)
     monkeypatch.setattr(repository, "Pusher", Pusher)
 
-    def upload():
+    def upload(**kwargs):
         repo = PackageRepo(
-            "test", "linux-64", tmp_path, registry="ghcr.io/example", client=client
+            "test",
+            "linux-64",
+            tmp_path,
+            registry="ghcr.io/example",
+            client=client,
+            **kwargs,
         )
         return repo, repo.upload(tmp_path)
 
@@ -189,6 +194,31 @@ def test_upload_pushes_only_shards_missing_from_the_published_index(
     assert downloads == ["extra"]
     assert [push["uri"] for push in pushes[:-2]] == [f"{shard_uri}:{digests['extra']}"]
     assert registry_tags == set(digests.values())
+
+    # An index published with the legacy "+zstd" media type still counts, so the
+    # first run after the switch to "+zst" does not list the shard tags.
+    for layer in client.latest["layers"]:
+        if layer["mediaType"] == defaults.repodata_shards_media_type_v1:
+            layer["mediaType"] = defaults.legacy_repodata_shards_media_type_v1
+    listings.clear()
+    downloads.clear()
+    _, pushes = upload()
+    assert listings == []
+    assert downloads == []
+    assert defaults.repodata_shards_media_type_v1 in {
+        layer["mediaType"] for layer in pushes[-1]["layers"]
+    }
+
+    # --repush-shards pushes every shard in the index again with the current
+    # media type, even though the published index already references them all.
+    _, pushes = upload(repush_shards=True)
+    assert listings == []
+    assert sorted(push["uri"] for push in pushes[:-2]) == sorted(
+        f"{shard_uri}:{digest}" for digest in digests.values()
+    )
+    assert {push["layers"][0]["media_type"] for push in pushes[:-2]} == {
+        defaults.repodata_shard_media_type_v1
+    }
 
 
 def test_package_repo(mirror_instance):

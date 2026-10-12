@@ -80,6 +80,11 @@ def add_options(options):
     type=click.IntRange(min=1),
     help="Parallel repodata shard uploads per subdir; kept low to spare the registry",
 )
+@click.option(
+    "--repush-shards",
+    is_flag=True,
+    help="Push every repodata shard again, not only new ones (e.g. after a media type change)",
+)
 def mirror(
     channel,
     subdir,
@@ -92,6 +97,7 @@ def mirror(
     workers,
     timeout,
     shard_workers,
+    repush_shards,
 ):
     setup_logger(
         quiet=quiet,
@@ -106,6 +112,7 @@ def mirror(
         workers=workers,
         timeout=timeout,
         shard_workers=shard_workers,
+        repush_shards=repush_shards,
     )
     m.update(dry_run)
     warn_skipped(m)
