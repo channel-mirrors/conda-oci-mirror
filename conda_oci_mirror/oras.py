@@ -3,10 +3,12 @@ import os
 import tempfile
 from urllib.parse import urlsplit
 
+import jsonschema
 import oras as oraslib
 import oras.defaults
 import oras.oci
 import oras.provider
+import oras.schemas
 import requests
 from oras.decorator import ensure_container
 
@@ -17,6 +19,28 @@ from conda_oci_mirror.logger import logger
 def registry_name(registry):
     """Strip transport from an OCI reference prefix, retaining its namespace."""
     return registry.split("://", 1)[-1].rstrip("/") if registry else registry
+
+
+# The OCI image-spec 1.1 empty descriptor, the config of every manifest the mirror writes.
+# oras-py's default config is a zero-byte blob, which some registries reject (Amazon ECR), so a
+# pull-through cache in front of the mirror could never store a package.
+EMPTY_CONFIG = {
+    "mediaType": "application/vnd.oci.empty.v1+json",
+    "size": 2,
+    "digest": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "data": "e30=",
+}
+EMPTY_CONFIG_CONTENT = b"{}"
+# The spec requires an artifactType next to the empty descriptor. This is the oras CLI's default.
+ARTIFACT_TYPE = "application/vnd.unknown.artifact.v1"
+# oras-py 0.1.14 rejects manifest keys it does not know, artifactType among them.
+MANIFEST_SCHEMA = {
+    **oraslib.schemas.manifest,
+    "properties": {
+        **oraslib.schemas.manifest["properties"],
+        "artifactType": {"type": "string"},
+    },
+}
 
 
 def get_oras_client(registry=None, insecure=False):
@@ -136,6 +160,31 @@ class Registry(oras.provider.Registry):
     def _check_200_response(self, response):
         response.raise_for_status()
         return super()._check_200_response(response)
+
+    @ensure_container
+    def get_manifest(self, container, allowed_media_type=None):
+        """oras-py's get_manifest, validating against a schema that knows artifactType."""
+        accept = allowed_media_type or [oraslib.defaults.default_manifest_media_type]
+        response = self.do_request(
+            f"{self.prefix}://{container.get_manifest_url()}",
+            "GET",
+            headers={"Accept": ";".join(accept)},
+        )
+        self._check_200_response(response)
+        manifest = response.json()
+        jsonschema.validate(manifest, schema=MANIFEST_SCHEMA)
+        return manifest
+
+    def upload_manifest(self, manifest, container):
+        """oras-py's upload_manifest, validating against a schema that knows artifactType."""
+        self.reset_basic_auth()
+        jsonschema.validate(manifest, schema=MANIFEST_SCHEMA)
+        return self.do_request(
+            f"{self.prefix}://{container.put_manifest_url()}",
+            "PUT",
+            headers={"Content-Type": oraslib.defaults.default_manifest_media_type},
+            json=manifest,
+        )
 
     @ensure_container
     def get_optional_manifest(self, container):
@@ -270,17 +319,19 @@ class Registry(oras.provider.Registry):
                     if layer["mediaType"] in keep
                 )
 
-        # Prepare manifest and config
-        # Note that we don't add annotations, etc. here
-        conf, config_file = oraslib.oci.ManifestConfig()
-
-        # Config is just another layer blob!
-        response = self.upload_blob(config_file, container, conf)
-        self._check_200_response(response)
+        # The config is just another blob; the manifest carries the empty descriptor.
+        with tempfile.NamedTemporaryFile(suffix=".json") as config:
+            config.write(EMPTY_CONFIG_CONTENT)
+            config.flush()
+            self._check_200_response(
+                self.upload_blob(config.name, container, EMPTY_CONFIG)
+            )
 
         # Final upload of the manifest
-        manifest["config"] = conf
-        self._check_200_response(self.upload_manifest(manifest, container))
+        manifest["config"] = EMPTY_CONFIG
+        manifest["artifactType"] = ARTIFACT_TYPE
+        response = self.upload_manifest(manifest, container)
+        self._check_200_response(response)
         print(f"Successfully pushed {container}")
         return response
 
@@ -289,36 +340,88 @@ class Registry(oras.provider.Registry):
         """
         Push a one-layer artifact with three requests: blob POST, blob PUT, manifest PUT.
 
-        push() authenticates every request from scratch and uploads the empty
-        config each time, roughly 11 requests per artifact. For many small
+        push() authenticates every request from scratch and uploads the config
+        each time, roughly 11 requests per artifact. For many small
         artifacts in one repository (repodata shards), reuse the bearer token
         and upload the config once.
         """
-        repository = container.upload_blob_url()
         layer = oraslib.oci.NewLayer(path, media_type)
         layer["annotations"] = {oraslib.defaults.annotation_title: title}
-        conf, config_file = oraslib.oci.ManifestConfig()
-
-        configs = self.__dict__.setdefault("_configs_pushed", set())
-        if repository not in configs:
-            self._upload_blob_with_token(container, config_file, conf)
-            configs.add(repository)
-        self._upload_blob_with_token(container, path, layer)
+        self._ensure_config_blob(container)
+        with open(path, "rb") as blob:
+            self._upload_blob_with_token(container, blob.read(), layer["digest"])
 
         manifest = oraslib.oci.NewManifest()
         manifest["layers"].append(layer)
-        manifest["config"] = conf
+        manifest["config"] = EMPTY_CONFIG
+        manifest["artifactType"] = ARTIFACT_TYPE
+        return self._put_manifest_with_token(container, manifest)
+
+    @ensure_container
+    def get_legacy_config_manifest(self, container):
+        """
+        The tag's manifest if its config is oras-py's zero-byte blob, else None.
+
+        None covers a missing tag, a manifest that already has the empty descriptor,
+        and anything the mirror did not write: a real config or an image index.
+        """
         response = self._request_with_token(
-            repository,
+            container.upload_blob_url(),
+            "GET",
+            f"{self.prefix}://{container.get_manifest_url()}",
+            headers={"Accept": oraslib.defaults.default_manifest_media_type},
+        )
+        if response.status_code == 404:
+            return None
+        self._check_200_response(response)
+        manifest = response.json()
+        config = manifest.get("config") or {}
+        return manifest if config.get("digest") == oraslib.defaults.blank_hash else None
+
+    @ensure_container
+    def rewrite_config(self, container):
+        """
+        Replace a manifest's zero-byte config with the empty descriptor, keeping its layers.
+
+        Returns whether the manifest was rewritten. The registry API has no conditional
+        PUT, so the manifest is fetched immediately before it is written back; a push to
+        the same tag in between would still be overwritten.
+        """
+        self._ensure_config_blob(container)
+        manifest = self.get_legacy_config_manifest(container)
+        if manifest is None:
+            return False
+        self._put_manifest_with_token(
+            container,
+            {"artifactType": ARTIFACT_TYPE, **manifest, "config": EMPTY_CONFIG},
+        )
+        return True
+
+    def _ensure_config_blob(self, container):
+        """Upload the empty config blob once per repository."""
+        repository = container.upload_blob_url()
+        configs = self.__dict__.setdefault("_configs_pushed", set())
+        if repository not in configs:
+            self._upload_blob_with_token(
+                container, EMPTY_CONFIG_CONTENT, EMPTY_CONFIG["digest"]
+            )
+            configs.add(repository)
+
+    def _put_manifest_with_token(self, container, manifest):
+        media_type = (
+            manifest.get("mediaType") or oraslib.defaults.default_manifest_media_type
+        )
+        response = self._request_with_token(
+            container.upload_blob_url(),
             "PUT",
             f"{self.prefix}://{container.put_manifest_url()}",
-            headers={"Content-Type": oraslib.defaults.default_manifest_media_type},
+            headers={"Content-Type": media_type},
             json=manifest,
         )
         self._check_200_response(response)
         return response
 
-    def _upload_blob_with_token(self, container, path, layer):
+    def _upload_blob_with_token(self, container, data, digest):
         repository = container.upload_blob_url()
         response = self._request_with_token(
             repository,
@@ -330,21 +433,16 @@ class Registry(oras.provider.Registry):
         session_url = self._get_location(response, container)
         if not session_url:
             raise ValueError(f"Issue retrieving session url for {container}")
-        with open(path, "rb") as blob:
-            data = blob.read()
         response = self._request_with_token(
             repository,
             "PUT",
-            oraslib.utils.append_url_params(session_url, {"digest": layer["digest"]}),
+            oraslib.utils.append_url_params(session_url, {"digest": digest}),
             headers={
-                "Content-Length": str(layer["size"]),
+                "Content-Length": str(len(data)),
                 "Content-Type": "application/octet-stream",
             },
             data=data,
         )
-        # Like oras' upload_blob: some registries reject the empty config blob.
-        if layer["digest"] == oraslib.defaults.blank_hash and not response.ok:
-            return response
         self._check_200_response(response)
         return response
 
@@ -352,6 +450,9 @@ class Registry(oras.provider.Registry):
         """Send a request with this repository's bearer token, renewing it on 401."""
         tokens = self.__dict__.setdefault("_repository_tokens", {})
         headers = dict(headers or {})
+        # Reads and writes keep separate tokens: a token obtained on a GET may be
+        # pull-only, and a registry can answer a write with it by 403, not 401.
+        repository = (repository, method in ("GET", "HEAD"))
         if repository in tokens:
             headers["Authorization"] = tokens[repository]
         response = self.session.request(method, url, headers=headers, **kwargs)

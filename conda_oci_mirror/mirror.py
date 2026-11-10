@@ -1,6 +1,7 @@
 import datetime
 import os
 import pathlib
+import tempfile
 
 import requests
 
@@ -41,6 +42,7 @@ class Mirror:
         timeout=700,
         shard_workers=2,
         repush_shards=False,
+        use_cache=True,
     ):
         self.channel = channel
         self.subdirs = subdirs or defaults.DEFAULT_SUBDIRS
@@ -55,7 +57,10 @@ class Mirror:
         self.client = get_oras_client(registry, insecure=insecure)
         self.registry = registry_name(registry)
 
-        self.cache_dir = os.path.abspath(cache_dir or defaults.CACHE_DIR)
+        # Not every command reads or writes the cache; those do not announce one.
+        self.cache_dir = (
+            os.path.abspath(cache_dir or defaults.CACHE_DIR) if use_cache else None
+        )
         self.quiet = quiet
         self.announce()
 
@@ -77,7 +82,8 @@ class Mirror:
         """
         Show metadata about the mirror setup
         """
-        util.print_item("Using cache dir:", self.cache_dir)
+        if self.cache_dir:
+            util.print_item("Using cache dir:", self.cache_dir)
         util.print_item(" Channel  :", self.channel)
         util.print_item("  Subdirs :", self.subdirs)
         util.print_item("  Packages:", "all" if not self.packages else self.packages)
@@ -154,6 +160,59 @@ class Mirror:
         if not dry_run:
             items += repo_runner.run_serial() if serial else repo_runner.run()
         return items
+
+    @decorators.require_registry
+    def migrate_configs(self, dry_run=False, serial=False):
+        """
+        Replace the zero-byte config of published manifests with the empty descriptor.
+
+        One task per repository: each package of the channel's repodata, yanked ones
+        included, each --package given by exact name, plus the repodata and shards
+        repositories of a complete mirror. The registry is not listed, so a package
+        that upstream no longer has in its repodata is only reached by naming it.
+        Manifests without the zero-byte config are skipped, so runs can be repeated
+        and sliced with --subdir and --package.
+        """
+        self.errors.clear()
+        util.print_item("Registry: ", self.registry)
+        runner = tasks.TaskRunner(workers=self.workers)
+        literal = {name for name in self.packages if not set("*?[") & set(name)}
+        # Exact names are the repositories; only patterns and "all" need the repodata.
+        need_repodata = not self.packages or literal != set(self.packages)
+
+        @decorators.retry(attempts=3, giveup=decorators.is_permanent)
+        def repodata_names(repo):
+            return repo.load_repodata(include_yanked=True).package_names
+
+        # The repodata only names the repositories: keep it out of the mirror's cache.
+        with tempfile.TemporaryDirectory() as scratch:
+            for subdir in self.subdirs:
+                repo = repository.PackageRepo(
+                    self.channel,
+                    subdir,
+                    os.path.join(scratch, subdir),
+                    self.registry,
+                    client=self.client,
+                    mirror_shards=False,
+                )
+                names = literal | (repodata_names(repo) if need_repodata else set())
+                uris = [
+                    f"{self.registry}/{repo.name}/{pkg.package_reference(name)}"
+                    for name in sorted(names)
+                    if pkg.matches_package(name, self.packages)
+                ]
+                if not self.packages:
+                    uris += [
+                        f"{self.registry}/{repo.name}/repodata.json",
+                        repo.shards_repository(self.registry),
+                    ]
+                for uri in uris:
+                    runner.add_task(
+                        tasks.ConfigRewriteTask(
+                            uri, self.client, wait_time=self.timeout, dry_run=dry_run
+                        )
+                    )
+        return runner.run_serial() if serial else runner.run()
 
     def iter_subdirs(self):
         """

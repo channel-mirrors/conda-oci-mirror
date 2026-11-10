@@ -47,6 +47,14 @@ A tag holds the `.conda` archive, the `.tar.bz2` archive, or both, depending on 
 publishes. Archive layers carry an `org.conda.md5` annotation. The `info` layers let clients read
 package metadata without downloading the archive.
 
+Every manifest's config is the OCI image-spec 1.1
+[empty descriptor](https://github.com/opencontainers/image-spec/blob/main/manifest.md#guidance-for-an-empty-descriptor):
+`{}` with media type `application/vnd.oci.empty.v1+json`, together with the `artifactType` the spec requires next to it,
+`application/vnd.unknown.artifact.v1`. Manifests pushed before this was adopted have oras-py's
+zero-byte config instead, which registries such as Amazon ECR cannot store, so a pull-through cache in front of the
+mirror could serve those packages but never keep a copy. `conda-oci migrate-configs` rewrites them, see
+[Migrate configs](#migrate-configs).
+
 Repodata and shards are stored as described in [OCI channel layout](#oci-channel-layout).
 
 ### mirrormirror
@@ -249,6 +257,44 @@ This command will require authentication, and you are also encouraged to use
 
 ```bash
 $ conda-oci push-cache --registry ghcr.io/researchapps --dry-run --package zlib --subdir linux-64
+```
+
+### Migrate configs
+
+`migrate-configs` replaces the zero-byte config of published manifests with the empty config descriptor. It lists
+the tags of each package in the channel's repodata, yanked packages included, plus `repodata.json` and its shards
+for a complete mirror. The registry itself is not listed, so a package that is no longer in the upstream repodata is
+only reached by naming it exactly with `--package`. When every `--package` is an exact name, no repodata is
+downloaded. The command does not use the cache directory.
+
+Each tag costs one manifest GET. A tag with the zero-byte config costs a second GET and a PUT, and each repository
+that needs a rewrite gets the two-byte config blob once; no layer is moved. Only the rewrites are paced by
+`--upload-delay`. On a registry with token authentication, each repository adds its tag listing and a token request for
+reading and another for writing, so a one-tag package repository takes ~twelve requests. Manifests with any other
+config are left alone, so a run can be repeated, resumed, or sliced with `--subdir` and `--package`. A tag or
+repository that fails is reported at the end and the command exits non-zero; the other tags and repositories are
+still migrated. A repository is abandoned after five failed tags in a row.
+
+Rewrites are paced one at a time across all workers, whatever `--workers` is, so a run takes at least the number of
+rewrites times `--upload-delay`. At the default of 500 ms, a million rewrites take about six days, and a mirror the
+size of conda-forge (3.7 million tags) about three weeks. Pass a lower delay, for example `--upload-delay 100`
+(about a day per million rewrites), and raise it again if the registry starts answering 429. That value is a
+starting point, not a measured registry limit. Separate invocations are paced separately, so subdirs can also be
+migrated side by side.
+
+Every publisher must run a version that writes the empty descriptor before anything is migrated. Older versions
+validate manifests with oras-py 0.1.14, which rejects the `artifactType` of a migrated manifest, so their next
+mirror run would fail on the first migrated tag it reads.
+
+Do not run it while the mirror is publishing to the same subdir. The registry API has no conditional write, so a
+manifest pushed between the migration's last GET and its PUT would be overwritten with the older layers.
+
+A manifest's digest changes when it is rewritten; clients address packages by tag and verify archives against
+repodata checksums, so they are unaffected.
+
+```bash
+$ conda-oci migrate-configs --registry ghcr.io/myorg --subdir noarch --dry-run
+$ conda-oci migrate-configs --registry ghcr.io/myorg --subdir noarch --package 'z*'
 ```
 
 ### Python API

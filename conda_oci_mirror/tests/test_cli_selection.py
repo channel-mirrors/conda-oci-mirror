@@ -151,3 +151,29 @@ def test_selection_agrees_across_operations(tmp_path, monkeypatch, patterns, exp
     assert {path: path.read_bytes() for path in directory.iterdir()} == {
         path: content for path, content in original.items() if path != index
     }
+
+
+def test_migrate_configs_reports_failed_repositories(monkeypatch):
+    results = [
+        {"uri": "r/ok", "tags": 3, "rewritten": 2, "errors": []},
+        {"uri": "r/broken", "tags": 1, "rewritten": 0, "errors": ["1.0-0: boom"]},
+    ]
+    mirror = Mock(return_value=Mock(migrate_configs=Mock(return_value=results)))
+    monkeypatch.setattr("conda_oci_mirror.cli.Mirror", mirror)
+    result = CliRunner().invoke(main, ["migrate-configs", "--quiet"])
+    assert result.exit_code == 1
+    assert "Rewrote 2 of 4 manifests in 2 repositories" in result.output
+    assert "Failed r/broken: 1.0-0: boom" in result.output
+
+    results.pop()
+    assert CliRunner().invoke(main, ["migrate-configs", "--quiet"]).exit_code == 0
+
+
+def test_migrate_configs_has_no_cache_dir(monkeypatch, capsys):
+    result = CliRunner().invoke(main, ["migrate-configs", "--cache-dir", "x"])
+    assert result.exit_code == 2
+    assert "No such option" in result.output
+
+    monkeypatch.setattr("conda_oci_mirror.mirror.get_forbidden_packages", list)
+    Mirror("conda-forge", None, registry="localhost:5000/x", use_cache=False)
+    assert "cache dir" not in capsys.readouterr().out
