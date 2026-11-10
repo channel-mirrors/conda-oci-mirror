@@ -47,6 +47,13 @@ A tag holds the `.conda` archive, the `.tar.bz2` archive, or both, depending on 
 publishes. Archive layers carry an `org.conda.md5` annotation. The `info` layers let clients read
 package metadata without downloading the archive.
 
+Every manifest's config is the OCI image-spec 1.1
+[empty descriptor](https://github.com/opencontainers/image-spec/blob/main/manifest.md#guidance-for-an-empty-descriptor):
+`{}` with media type `application/vnd.oci.empty.v1+json`, together with the `artifactType` the spec requires next to it,
+`application/vnd.unknown.artifact.v1`. Manifests pushed before this was adopted have oras-py's
+zero-byte config instead, which registries such as Amazon ECR cannot store, so a pull-through cache in front of the
+mirror could serve those packages but never keep a copy.
+
 Repodata and shards are stored as described in [OCI channel layout](#oci-channel-layout).
 
 ### mirrormirror
