@@ -25,6 +25,9 @@ def main():
     pass
 
 
+cache_dir_option = click.option(
+    "--cache-dir", default=default_cache, help="Path to cache directory"
+)
 options = [
     click.option("-s", "--subdir", default=defaults.DEFAULT_SUBDIRS, multiple=True),
     click.option(
@@ -52,7 +55,7 @@ options = [
         type=click.IntRange(min=0),
         help="Upload delay in milliseconds (not an HTTP timeout)",
     ),
-    click.option("--cache-dir", default=default_cache, help="Path to cache directory"),
+    cache_dir_option,
     click.option("-c", "--channel", help="Select channel", default="conda-forge"),
     click.option("--quiet", is_flag=True, help="Suppress informational logs"),
     click.option("--debug", is_flag=True, help="Enable debug logging"),
@@ -191,3 +194,49 @@ def push_cache(
     else:
         m.push_new(dry_run)
     warn_skipped(m)
+
+
+@main.command()
+# The migration reads the registry and upstream repodata, never the cache.
+@add_options([option for option in options if option is not cache_dir_option])
+def migrate_configs(
+    channel,
+    subdir,
+    registry,
+    package,
+    dry_run,
+    quiet,
+    debug,
+    workers,
+    timeout,
+):
+    """
+    Rewrite published manifests to the OCI empty config descriptor.
+
+    Manifests pushed before this descriptor was adopted carry a zero-byte config,
+    which registries such as Amazon ECR cannot store.
+    """
+    setup_logger(
+        quiet=quiet,
+        debug=debug,
+    )
+    m = Mirror(
+        channel=channel,
+        subdirs=subdir,
+        packages=package,
+        registry=registry,
+        use_cache=False,
+        workers=workers,
+        timeout=timeout,
+    )
+    results = m.migrate_configs(dry_run)
+    rewritten = sum(result["rewritten"] for result in results)
+    tags = sum(result["tags"] for result in results)
+    verb = "Would rewrite" if dry_run else "Rewrote"
+    click.echo(f"{verb} {rewritten} of {tags} manifests in {len(results)} repositories")
+    failed = [result for result in results if result["errors"]]
+    for result in failed:
+        for error in result["errors"]:
+            click.echo(f"Failed {result['uri']}: {error}", err=True)
+    if failed:
+        raise SystemExit(f"{len(failed)} repositories had failures; rerun to retry.")

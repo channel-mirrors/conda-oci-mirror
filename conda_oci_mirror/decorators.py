@@ -19,9 +19,15 @@ class Decorator:
         return partial(self.__call__, obj)
 
 
-def retry(attempts, timeout=2):
+def is_permanent(error):
+    """A client error that a retry cannot change, such as 401 or 403. Not 408 or 429."""
+    status = getattr(getattr(error, "response", None), "status_code", None)
+    return status is not None and 400 <= status < 500 and status not in (408, 429)
+
+
+def retry(attempts, timeout=2, giveup=None):
     """
-    A simple retry decorator
+    A simple retry decorator. Errors for which giveup(error) is true are not retried.
     """
 
     def decorator(func):
@@ -30,7 +36,9 @@ def retry(attempts, timeout=2):
             while attempt < attempts:
                 try:
                     return func(*args, **kwargs)
-                except Exception as e:  # noqa: BLE001 - retry on any error
+                except Exception as e:
+                    if giveup and giveup(e):
+                        raise
                     sleep = timeout + 3**attempt
                     logger.info(f"Retrying in {sleep} seconds - error: {e}")
                     time.sleep(sleep)

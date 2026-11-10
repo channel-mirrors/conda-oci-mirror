@@ -1,6 +1,10 @@
 import multiprocessing as mp
 import time
 
+import requests
+
+from conda_oci_mirror import decorators
+from conda_oci_mirror.logger import logger
 from conda_oci_mirror.oras import get_oras_client, registry_name
 from conda_oci_mirror.package import package_reference, skip_invalid_tag
 
@@ -127,6 +131,78 @@ class DownloadTask(TaskBase):
         if not paths:
             raise ValueError(f"No {self.media_type} layer found for {self.uri}")
         return paths
+
+
+def describe(error):
+    """An error message that is never empty, whatever str(error) is."""
+    return f"{type(error).__name__}: {error}"
+
+
+class ConfigRewriteTask(TaskBase):
+    """
+    Replace the zero-byte config of every manifest in one repository.
+
+    Other manifests are left alone, so a run can be repeated or resumed. Failures
+    are returned in the result: a tag cannot block the tags after it, and a
+    repository cannot discard the others' results.
+    """
+
+    max_consecutive_failures = 5
+
+    def __init__(self, uri, client, wait_time=0.5, dry_run=False):
+        self.uri = uri
+        self.client = client
+        self.wait_time = wait_time
+        self.dry_run = dry_run
+
+    @decorators.retry(attempts=3, giveup=decorators.is_permanent)
+    def get_tags(self):
+        try:
+            return self.client.get_tags(self.uri, N=100_000_000)
+        except requests.HTTPError as exc:
+            if exc.response is None or exc.response.status_code != 404:
+                raise
+            return []
+
+    @decorators.retry(attempts=3, giveup=decorators.is_permanent)
+    def rewrite(self, tag):
+        uri = f"{self.uri}:{tag}"
+        # Only writes are rate limited; most tags of a resumed run need none.
+        if self.client.get_legacy_config_manifest(uri) is None:
+            return False
+        if self.dry_run:
+            return True
+        self.wait(self.wait_time)
+        return self.client.rewrite_config(uri)
+
+    def run(self):
+        result = {"uri": self.uri, "tags": 0, "rewritten": 0, "errors": []}
+        try:
+            tags = self.get_tags()
+        except Exception as exc:  # noqa: BLE001 - reported by the caller
+            tags = []
+            result["errors"].append(describe(exc))
+        failures = 0
+        for tag in tags:
+            result["tags"] += 1
+            # A tag that keeps failing must not hide the tags after it, on any rerun.
+            try:
+                result["rewritten"] += self.rewrite(tag)
+                failures = 0
+            except Exception as exc:  # noqa: BLE001 - reported by the caller
+                result["errors"].append(f"{tag}: {describe(exc)}")
+                failures += 1
+                if failures == self.max_consecutive_failures:
+                    # The registry, not the tags: do not retry through the whole repository.
+                    result["errors"].append(f"stopped after {failures} failed tags")
+                    break
+        for error in result["errors"]:
+            logger.error(f"{self.uri}: {error}")
+        verb = "would rewrite" if self.dry_run else "rewrote"
+        logger.info(
+            f"{self.uri}: {verb} {result['rewritten']} of {result['tags']} manifests"
+        )
+        return result
 
 
 class TaskRunner:

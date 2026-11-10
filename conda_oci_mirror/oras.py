@@ -355,15 +355,47 @@ class Registry(oras.provider.Registry):
         manifest["layers"].append(layer)
         manifest["config"] = EMPTY_CONFIG
         manifest["artifactType"] = ARTIFACT_TYPE
+        return self._put_manifest_with_token(container, manifest)
+
+    @ensure_container
+    def get_legacy_config_manifest(self, container):
+        """
+        The tag's manifest if its config is oras-py's zero-byte blob, else None.
+
+        None covers a missing tag, a manifest that already has the empty descriptor,
+        and anything the mirror did not write: a real config or an image index.
+        """
         response = self._request_with_token(
             container.upload_blob_url(),
-            "PUT",
-            f"{self.prefix}://{container.put_manifest_url()}",
-            headers={"Content-Type": oraslib.defaults.default_manifest_media_type},
-            json=manifest,
+            "GET",
+            f"{self.prefix}://{container.get_manifest_url()}",
+            headers={"Accept": oraslib.defaults.default_manifest_media_type},
         )
+        if response.status_code == 404:
+            return None
         self._check_200_response(response)
-        return response
+        manifest = response.json()
+        config = manifest.get("config") or {}
+        return manifest if config.get("digest") == oraslib.defaults.blank_hash else None
+
+    @ensure_container
+    def rewrite_config(self, container):
+        """
+        Replace a manifest's zero-byte config with the empty descriptor, keeping its layers.
+
+        Returns whether the manifest was rewritten. The registry API has no conditional
+        PUT, so the manifest is fetched immediately before it is written back; a push to
+        the same tag in between would still be overwritten.
+        """
+        self._ensure_config_blob(container)
+        manifest = self.get_legacy_config_manifest(container)
+        if manifest is None:
+            return False
+        self._put_manifest_with_token(
+            container,
+            {"artifactType": ARTIFACT_TYPE, **manifest, "config": EMPTY_CONFIG},
+        )
+        return True
 
     def _ensure_config_blob(self, container):
         """Upload the empty config blob once per repository."""
@@ -374,6 +406,20 @@ class Registry(oras.provider.Registry):
                 container, EMPTY_CONFIG_CONTENT, EMPTY_CONFIG["digest"]
             )
             configs.add(repository)
+
+    def _put_manifest_with_token(self, container, manifest):
+        media_type = (
+            manifest.get("mediaType") or oraslib.defaults.default_manifest_media_type
+        )
+        response = self._request_with_token(
+            container.upload_blob_url(),
+            "PUT",
+            f"{self.prefix}://{container.put_manifest_url()}",
+            headers={"Content-Type": media_type},
+            json=manifest,
+        )
+        self._check_200_response(response)
+        return response
 
     def _upload_blob_with_token(self, container, data, digest):
         repository = container.upload_blob_url()
@@ -404,6 +450,9 @@ class Registry(oras.provider.Registry):
         """Send a request with this repository's bearer token, renewing it on 401."""
         tokens = self.__dict__.setdefault("_repository_tokens", {})
         headers = dict(headers or {})
+        # Reads and writes keep separate tokens: a token obtained on a GET may be
+        # pull-only, and a registry can answer a write with it by 403, not 401.
+        repository = (repository, method in ("GET", "HEAD"))
         if repository in tokens:
             headers["Authorization"] = tokens[repository]
         response = self.session.request(method, url, headers=headers, **kwargs)
