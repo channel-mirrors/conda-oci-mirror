@@ -25,7 +25,7 @@ classifiers = [
 dependencies = [
     "click",
     "requests",
-    "oras==0.1.14",
+    "oras>=0.2.43,<0.3",
     "conda-package-handling",
     "zstandard",
     "py-rattler>=0.15",

@@ -419,7 +419,7 @@ class PackageRepo:
         """
         uri = self.shards_repository(registry)
         try:
-            return set(client.get_tags(uri, N=100_000_000))
+            return set(client.get_tags(uri))
         except requests.HTTPError as exc:
             if exc.response is None or exc.response.status_code != 404:
                 raise
@@ -618,7 +618,7 @@ class PackageRepo:
         key = (client.prefix, gh_name)
         if key not in self._existing_tags:
             try:
-                tags = client.get_tags(gh_name, N=100_000_000)
+                tags = client.get_tags(gh_name)
             except requests.HTTPError as exc:
                 if exc.response is None or exc.response.status_code != 404:
                     raise

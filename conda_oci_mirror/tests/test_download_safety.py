@@ -93,7 +93,6 @@ def test_download_is_verified_and_atomic(
             return outfile
 
         monkeypatch.setattr("oras.provider.Registry.download_blob", blob)
-        monkeypatch.setattr(client, "load_configs", Mock())
 
         def download():
             if source == "oci-pull":

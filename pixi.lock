@@ -2,18 +2,18 @@ version: 7
 platforms:
 - name: linux-64
   virtual-packages:
-  - __unix=0=0
+  - __unix=0
   - __linux=4.18
   - __glibc=2.28
   - __archspec=0=x86_64
 - name: osx-64
   virtual-packages:
-  - __unix=0=0
+  - __unix=0
   - __osx=13.0
   - __archspec=0=x86_64
 - name: osx-arm64
   virtual-packages:
-  - __unix=0=0
+  - __unix=0
   - __osx=13.0
   - __archspec=0=m1
 environments:
@@ -139,7 +139,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jsonschema-specifications-2025.9.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/oras-py-0.1.14-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/oras-py-0.2.43-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pip-26.2.1-pyh8b19718_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pkginfo-1.12.1.2-pyhd8ed1ab_0.conda
@@ -219,7 +219,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jsonschema-specifications-2025.9.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/oras-py-0.1.14-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/oras-py-0.2.43-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pip-26.2.1-pyh8b19718_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pkginfo-1.12.1.2-pyhd8ed1ab_0.conda
@@ -373,7 +373,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/jsonschema-4.26.0-pyhcf101f3_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/jsonschema-specifications-2025.9.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/oras-py-0.1.14-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/oras-py-0.2.43-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pip-26.2.1-pyh8b19718_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pkginfo-1.12.1.2-pyhd8ed1ab_0.conda
@@ -2007,8 +2007,7 @@ packages:
   - cached_property >=2.0.1,<2.0.2.0a0
   license: BSD-3-Clause
   license_family: BSD
-  purls:
-  - pkg:pypi/cached-property?source=compressed-mapping
+  purls: []
   run_exports: {}
   size: 3720
   timestamp: 1787678456483
@@ -2319,7 +2318,7 @@ packages:
   - python >=3.10
   license: Unlicense
   purls:
-  - pkg:pypi/filelock?source=compressed-mapping
+  - pkg:pypi/filelock?source=hash-mapping
   run_exports: {}
   size: 78858
   timestamp: 1788217445739
@@ -2476,7 +2475,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/jsonschema?source=compressed-mapping
+  - pkg:pypi/jsonschema?source=hash-mapping
   run_exports: {}
   size: 82084
   timestamp: 1787579299493
@@ -2505,20 +2504,20 @@ packages:
     - nlohmann_json-abi ==3.12.0
   size: 4365
   timestamp: 1785920576349
-- conda: https://conda.anaconda.org/conda-forge/noarch/oras-py-0.1.14-pyhd8ed1ab_0.conda
-  sha256: 39b2cd630754de540ad4308942f78279cdc5d398815d684dbe3e6e59e144cc3e
-  md5: 0a1109e5353a81b0251583253d6ccf23
+- conda: https://conda.anaconda.org/conda-forge/noarch/oras-py-0.2.43-pyhd8ed1ab_0.conda
+  sha256: 3d2f3ebb3f9c3425a2ec5b0932ad50cb68ef1cc3d5c798d05a4fcdabb0273662
+  md5: 53d784dae86af82580c3107b31805d48
   depends:
   - jsonschema
-  - python >=3.7
+  - python >=3.10
   - requests
   license: Apache-2.0
   license_family: APACHE
   purls:
   - pkg:pypi/oras?source=hash-mapping
   run_exports: {}
-  size: 34379
-  timestamp: 1675555551728
+  size: 63557
+  timestamp: 1786227985221
 - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
   sha256: c432626b16768b8dab228bfb706f7060c2d462a21c516d240f68f2f902b5a044
   md5: 936687ed80f295a1f5dbcf8bd34c252c
@@ -5643,7 +5642,7 @@ packages:
   requires_dist:
   - click
   - requests
-  - oras==0.1.14
+  - oras>=0.2.43,<0.3
   - conda-package-handling
   - zstandard
   - py-rattler>=0.15

@@ -7,7 +7,7 @@ platforms = ["linux-64", "osx-64", "osx-arm64"]
 python = "3.10.*"
 click = "*"
 requests = "*"
-oras-py = "0.1.14.*"
+oras-py = ">=0.2.43,<0.3"
 conda-package-handling = "*"
 zstandard = "*"
 msgpack-python = "*"

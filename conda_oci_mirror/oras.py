@@ -1,14 +1,16 @@
 import datetime
 import os
+import re
 import tempfile
+from http.cookiejar import DefaultCookiePolicy
 from urllib.parse import urlsplit
 
-import jsonschema
 import oras as oraslib
+import oras.auth.utils
+import oras.decorator
 import oras.defaults
 import oras.oci
 import oras.provider
-import oras.schemas
 import requests
 from oras.decorator import ensure_container
 
@@ -33,14 +35,17 @@ EMPTY_CONFIG = {
 EMPTY_CONFIG_CONTENT = b"{}"
 # The spec requires an artifactType next to the empty descriptor. This is the oras CLI's default.
 ARTIFACT_TYPE = "application/vnd.unknown.artifact.v1"
-# oras-py 0.1.14 rejects manifest keys it does not know, artifactType among them.
-MANIFEST_SCHEMA = {
-    **oraslib.schemas.manifest,
-    "properties": {
-        **oraslib.schemas.manifest["properties"],
-        "artifactType": {"type": "string"},
-    },
-}
+# The repository part of a registry API path: /v2/<name>/blobs/..., /manifests/<ref> or /tags/list.
+REPOSITORY_PATH = re.compile(
+    r"^(/v2/.+)/(?:blobs/uploads/[^/]*|blobs/[^/]+|manifests/[^/]+|tags/list)$"
+)
+
+
+def repository_of(url):
+    """The host and repository a registry API URL belongs to, the scope of a bearer token."""
+    parts = urlsplit(url)
+    match = REPOSITORY_PATH.match(parts.path)
+    return parts.netloc + (match.group(1) if match else "")
 
 
 def get_oras_client(registry=None, insecure=False):
@@ -136,14 +141,37 @@ class Pusher:
         return {"uri": uri, "layers": self.layers}
 
 
+class EnvironmentAuth(oraslib.auth.TokenAuth):
+    """
+    oras-py's auth backend, minus Docker's config and credential helpers.
+
+    oras-py loads ~/.docker/config.json, and runs its credential helper, on every push,
+    pull and manifest read. The mirror's credentials are ORAS_USER and ORAS_PASS.
+    """
+
+    def load_configs(self, container, configs=None):
+        pass
+
+
 class Registry(oras.provider.Registry):
+    def __init__(self, *args, **kwargs):
+        self._session = None
+        super().__init__(*args, **kwargs)
+        # do_request authenticates; oras-py's backend is only asked to load configs.
+        self.auth = EnvironmentAuth()
+        # Bearer tokens by repository; see do_request.
+        self._repository_tokens = {}
+
     @property
     def session(self):
         # Each worker owns its connection pool, even when created with fork.
         if self._session is None or self._session_pid != os.getpid():
             if self._session is not None:
                 self._session.close()
-            self.session = requests.Session()
+            session = requests.Session()
+            # Like oras-py: ignore cookies, some registries treat them as a browser session.
+            session.cookies.set_policy(DefaultCookiePolicy(allowed_domains=[]))
+            self.session = session
         return self._session
 
     @session.setter
@@ -157,34 +185,84 @@ class Registry(oras.provider.Registry):
         state["_session_pid"] = None
         return state
 
+    def set_basic_auth(self, username, password):
+        """Credentials for every request without a bearer token, and for token requests."""
+        basic = oraslib.auth.utils.get_basic_auth(username, password)
+        self.headers["Authorization"] = f"Basic {basic}"
+
     def _check_200_response(self, response):
         response.raise_for_status()
         return super()._check_200_response(response)
 
-    @ensure_container
-    def get_manifest(self, container, allowed_media_type=None):
-        """oras-py's get_manifest, validating against a schema that knows artifactType."""
-        accept = allowed_media_type or [oraslib.defaults.default_manifest_media_type]
-        response = self.do_request(
-            f"{self.prefix}://{container.get_manifest_url()}",
-            "GET",
-            headers={"Accept": ";".join(accept)},
-        )
-        self._check_200_response(response)
-        manifest = response.json()
-        jsonschema.validate(manifest, schema=MANIFEST_SCHEMA)
-        return manifest
+    @oraslib.decorator.retry()
+    def do_request(
+        self, url, method="GET", data=None, headers=None, json=None, stream=False
+    ):
+        """
+        Send a request with the bearer token of the URL's repository, or the credentials.
 
-    def upload_manifest(self, manifest, container):
-        """oras-py's upload_manifest, validating against a schema that knows artifactType."""
-        self.reset_basic_auth()
-        jsonschema.validate(manifest, schema=MANIFEST_SCHEMA)
-        return self.do_request(
-            f"{self.prefix}://{container.put_manifest_url()}",
-            "PUT",
-            headers={"Content-Type": oraslib.defaults.default_manifest_media_type},
-            json=manifest,
+        oras-py keeps a single bearer token per client and resends it when the registry
+        answers 401, so a client that moves on to a repository the token is not scoped
+        for fails. Tokens are kept per repository, and a 401 always requests a new one
+        with the credentials, never with a stale token.
+        """
+        repository = repository_of(url)
+        headers = {
+            key: value
+            for key, value in (headers or {}).items()
+            if key.lower() != "authorization"
+        }
+
+        def send(authorization):
+            request_headers = dict(headers)
+            if authorization:
+                request_headers["Authorization"] = authorization
+            return self.session.request(
+                method,
+                url,
+                data=data,
+                json=json,
+                headers=request_headers,
+                stream=stream,
+                verify=self._tls_verify,
+            )
+
+        response = send(
+            self._repository_tokens.get(repository) or self.headers.get("Authorization")
         )
+        if response.status_code == 401:
+            token = self._request_token(response)
+            if token:
+                response.close()
+                self._repository_tokens[repository] = f"Bearer {token}"
+                response = send(self._repository_tokens[repository])
+        return response
+
+    def _request_token(self, response):
+        """A bearer token for the challenge in a 401 response, or None."""
+        challenge = response.headers.get("Www-Authenticate", "")
+        if not challenge.lower().startswith("bearer "):
+            return None
+        header = oraslib.auth.utils.parse_auth_header(challenge)
+        if not header.realm:
+            return None
+        realm = header.realm
+        if not realm.startswith("http"):
+            realm = f"{self.prefix}://{realm}"
+        params = {"service": header.service, "scope": header.scope}
+        # Credentials if there are any, otherwise an anonymous token.
+        credentials = self.headers.get("Authorization")
+        token_response = self.session.get(
+            realm,
+            params={key: value for key, value in params.items() if value},
+            headers={"Authorization": credentials} if credentials else {},
+            verify=self._tls_verify,
+        )
+        if token_response.status_code != 200:
+            logger.debug(f"Token request to {realm} failed: {token_response.text}")
+            return None
+        body = token_response.json()
+        return body.get("token") or body.get("access_token")
 
     @ensure_container
     def get_optional_manifest(self, container):
@@ -340,25 +418,23 @@ class Registry(oras.provider.Registry):
         """
         Push a one-layer artifact with three requests: blob POST, blob PUT, manifest PUT.
 
-        push() authenticates every request from scratch and uploads the config
-        each time, roughly 11 requests per artifact. For many small
-        artifacts in one repository (repodata shards), reuse the bearer token
-        and upload the config once.
+        push() checks whether every blob exists first and uploads the config each
+        time. For many small artifacts in one repository (repodata shards), skip
+        the existence checks and upload the config once.
         """
         layer = oraslib.oci.NewLayer(path, media_type)
         layer["annotations"] = {oraslib.defaults.annotation_title: title}
         self._ensure_config_blob(container)
         with open(path, "rb") as blob:
-            self._upload_blob_with_token(container, blob.read(), layer["digest"])
+            self._upload_blob_data(container, blob.read(), layer["digest"])
 
         manifest = oraslib.oci.NewManifest()
         manifest["layers"].append(layer)
         manifest["config"] = EMPTY_CONFIG
         manifest["artifactType"] = ARTIFACT_TYPE
-        response = self._request_with_token(
-            container.upload_blob_url(),
+        response = self.do_request(
+            f"{self.prefix}://{container.manifest_url()}",
             "PUT",
-            f"{self.prefix}://{container.put_manifest_url()}",
             headers={"Content-Type": oraslib.defaults.default_manifest_media_type},
             json=manifest,
         )
@@ -370,27 +446,25 @@ class Registry(oras.provider.Registry):
         repository = container.upload_blob_url()
         configs = self.__dict__.setdefault("_configs_pushed", set())
         if repository not in configs:
-            self._upload_blob_with_token(
+            self._upload_blob_data(
                 container, EMPTY_CONFIG_CONTENT, EMPTY_CONFIG["digest"]
             )
             configs.add(repository)
 
-    def _upload_blob_with_token(self, container, data, digest):
-        repository = container.upload_blob_url()
-        response = self._request_with_token(
-            repository,
+    def _upload_blob_data(self, container, data, digest):
+        """Upload a blob from memory: one POST for the session, one PUT with the data."""
+        response = self.do_request(
+            f"{self.prefix}://{container.upload_blob_url()}",
             "POST",
-            f"{self.prefix}://{repository}",
             headers={"Content-Type": "application/octet-stream"},
         )
         self._check_200_response(response)
         session_url = self._get_location(response, container)
         if not session_url:
             raise ValueError(f"Issue retrieving session url for {container}")
-        response = self._request_with_token(
-            repository,
-            "PUT",
+        response = self.do_request(
             oraslib.utils.append_url_params(session_url, {"digest": digest}),
+            "PUT",
             headers={
                 "Content-Length": str(len(data)),
                 "Content-Type": "application/octet-stream",
@@ -398,25 +472,6 @@ class Registry(oras.provider.Registry):
             data=data,
         )
         self._check_200_response(response)
-        return response
-
-    def _request_with_token(self, repository, method, url, headers=None, **kwargs):
-        """Send a request with this repository's bearer token, renewing it on 401."""
-        tokens = self.__dict__.setdefault("_repository_tokens", {})
-        headers = dict(headers or {})
-        if repository in tokens:
-            headers["Authorization"] = tokens[repository]
-        response = self.session.request(method, url, headers=headers, **kwargs)
-        if response.status_code == 401:
-            # Log in with the credentials, never with a stale bearer token. The
-            # token is kept out of self.headers so other requests are unaffected.
-            self.reset_basic_auth()
-            if self.authenticate_request(response):
-                tokens[repository] = headers["Authorization"] = self.headers[
-                    "Authorization"
-                ]
-                response = self.session.request(method, url, headers=headers, **kwargs)
-            self.reset_basic_auth()
         return response
 
 
