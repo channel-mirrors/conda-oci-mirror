@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 
 from conda_oci_mirror import defaults
-from conda_oci_mirror.oras import get_oras_client
+from conda_oci_mirror.oras import ARTIFACT_TYPE, EMPTY_CONFIG, get_oras_client
 
 
 @pytest.fixture
@@ -125,6 +125,8 @@ def test_shard_pushes_reuse_the_token_and_the_config(
     assert layer["annotations"]["org.opencontainers.image.title"] == (
         "shards/fourth.msgpack.zst"
     )
-    assert manifest["config"]["digest"] in token_registry["blobs"]
+    assert manifest["config"] == EMPTY_CONFIG
+    assert manifest["artifactType"] == ARTIFACT_TYPE
+    assert token_registry["blobs"][EMPTY_CONFIG["digest"]] == b"{}"
     # The bearer token never leaks into the client's shared headers.
     assert client.headers["Authorization"] == basic

@@ -40,8 +40,8 @@ def test_mirrors_do_not_share_transport_or_credentials(tmp_path, monkeypatch):
         first.client.headers["Authorization"] != second.client.headers["Authorization"]
     )
     assert oras.prefix == original_prefix
-    first.client.set_token_auth("test-token")
-    assert second.client.token is None
+    first.client._repository_tokens["localhost:5000/v2/first"] = "Bearer test-token"
+    assert second.client._repository_tokens == {}
 
 
 def test_tasks_and_pushers_use_the_explicit_client(tmp_path, monkeypatch):
