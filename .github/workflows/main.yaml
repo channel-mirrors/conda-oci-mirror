@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v3
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
         with:
-          pixi-version: v0.81.0
+          pixi-version: v0.84.2
           environments: lint
       - name: Lint Conda Oci Mirror
         run: pixi run lint
@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v3
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
         with:
-          pixi-version: v0.81.0
+          pixi-version: v0.84.2
       - name: Test Conda OCI Mirror
         env:
           registry_host: http://localhost
@@ -64,7 +64,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v3
       - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
         with:
-          pixi-version: v0.81.0
+          pixi-version: v0.84.2
 
       - name: Test Conda Oci Mirror
         shell: pixi run bash -e {0}
